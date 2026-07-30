@@ -1,0 +1,29 @@
+version: "3.9"
+
+services:
+  pms-api:
+    image: pms-backend:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pms-api
+    env_file:
+      - .env                                  # loads all secrets from .env file
+    ports:
+      - "5259:8080"                           # host:container
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      # Map .env variables to ASP.NET configuration keys
+      ConnectionStrings__DefaultConnection:   ${DB_CONNECTION_STRING}
+      JwtSettings__SecretKey:                 ${JWT_SECRET}
+      JwtSettings__Issuer:                    PMS.API
+      JwtSettings__Audience:                  PMS.Client
+      JwtSettings__ExpiryInMinutes:           ${JWT_EXPIRY_MINUTES:-60}
+      CORS_ORIGINS:                           ${CORS_ORIGINS:-http://localhost:3000}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf -o /dev/null http://localhost:8080/api/auth/login -X POST -H 'Content-Type: application/json' -d '{\"email\":\"x\",\"password\":\"x\"}' && exit 0 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s

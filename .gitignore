@@ -1,0 +1,26 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+.idea/
+
+## Publish output
+publish/
+out/
+
+## Secrets — never commit these
+.env
+.env.local
+.env.*.local
+appsettings.Development.json
+
+## Keep these (safe templates / production config skeleton)
+!.env.example
+!appsettings.json
+!appsettings.Production.json
+
+## OS
+.DS_Store
+Thumbs.db
