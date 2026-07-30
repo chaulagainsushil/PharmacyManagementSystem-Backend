@@ -26,9 +26,9 @@ RUN dotnet publish PMS/PMS.csproj \
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 
-# Create a non-root user for security
-RUN addgroup --system --gid 1001 appgroup && \
-    adduser  --system --uid 1001 --ingroup appgroup appuser
+# Create a non-root user for security (Red Hat-based image uses groupadd/useradd)
+RUN groupadd --system --gid 1001 appgroup && \
+    useradd  --system --uid 1001 --gid appgroup appuser
 
 # Copy published output from build stage
 COPY --from=build /app/publish .

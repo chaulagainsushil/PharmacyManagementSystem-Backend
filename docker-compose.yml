@@ -22,7 +22,7 @@ services:
       CORS_ORIGINS:                           ${CORS_ORIGINS:-http://localhost:3000}
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf -o /dev/null http://localhost:8080/api/auth/login -X POST -H 'Content-Type: application/json' -d '{\"email\":\"x\",\"password\":\"x\"}' && exit 0 || exit 1"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/openapi/v1.json -o /dev/null || curl -sf http://localhost:8080/api/category -H 'Authorization: Bearer dummy' -o /dev/null -w '%{http_code}' | grep -qE '200|401'"]
       interval: 30s
       timeout: 10s
       retries: 3
