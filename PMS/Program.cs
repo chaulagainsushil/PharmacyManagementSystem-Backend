@@ -15,18 +15,18 @@ builder.Services.AddApplicationServices(builder.Configuration);
 builder.Services.AddCrudServices();
 
 // ── CORS ──────────────────────────────────────────────────────────────────────
-// Reads CORS_ORIGINS env var (comma-separated). Falls back to localhost:3000.
-var corsOrigins = (builder.Configuration["CORS_ORIGINS"] ?? "http://localhost:3000")
-    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("FrontendPolicy", policy =>
-        policy
-            .WithOrigins(corsOrigins)
-            .AllowAnyHeader()
+    var allowedOriginsCommaSeparated = builder.Configuration.GetSection("AllowedOrigins").Get<string>() ?? string.Empty;
+    var allowedOrigins = allowedOriginsCommaSeparated.Split(",", StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+
+    options.AddPolicy("MyAppPolicy", policy =>
+    {
+        policy.WithOrigins(allowedOrigins)
             .AllowAnyMethod()
-            .AllowCredentials());
+            .AllowAnyHeader()
+            .AllowCredentials();
+    });
 });
 
 // ── Controllers + OpenAPI ─────────────────────────────────────────────────────
@@ -41,7 +41,7 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-app.UseCors("FrontendPolicy");
+app.UseCors("MyAppPolicy");
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
