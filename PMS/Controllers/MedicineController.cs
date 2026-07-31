@@ -51,6 +51,23 @@ public class MedicineController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = data!.MedicineId }, data);
     }
 
+    /// <summary>
+    /// Bulk-create medicines. Each row is validated independently;
+    /// valid rows are inserted in a single DB round-trip.
+    /// Returns a per-item result so the caller knows which rows succeeded and which failed.
+    /// </summary>
+    [HttpPost("bulk")]
+    [ProducesResponseType(typeof(BulkCreateMedicineResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> CreateBulk([FromBody] List<CreateMedicineDto> dtos)
+    {
+        if (dtos == null || dtos.Count == 0)
+            return BadRequest(new { message = "Request body must contain at least one medicine." });
+
+        var result = await _service.CreateBulkAsync(dtos);
+        return Ok(result);
+    }
+
     /// <summary>Update an existing medicine.</summary>
     [HttpPut("{id:int}")]
     [ProducesResponseType(typeof(MedicineResponseDto), StatusCodes.Status200OK)]

@@ -68,6 +68,88 @@ public class MedicineService : IMedicineService
         return (true, "Medicine created successfully.", MapToResponse(full!));
     }
 
+    public async Task<BulkCreateMedicineResultDto> CreateBulkAsync(IReadOnlyList<CreateMedicineDto> dtos)
+    {
+        var results  = new List<BulkCreateMedicineItemResultDto>(dtos.Count);
+        var toInsert = new List<(int Index, Medicine Entity)>();
+
+        // ── Per-row validation (duplicate name check) ─────────────────────────
+        // Track names already seen within this batch to catch intra-batch dupes.
+        var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        for (int i = 0; i < dtos.Count; i++)
+        {
+            var dto  = dtos[i];
+            var name = dto.Name?.Trim() ?? string.Empty;
+
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                results.Add(new BulkCreateMedicineItemResultDto
+                    { Index = i, Success = false, Message = "Medicine name is required." });
+                continue;
+            }
+
+            if (!seenNames.Add(name))
+            {
+                results.Add(new BulkCreateMedicineItemResultDto
+                    { Index = i, Success = false, Message = $"Duplicate name '{name}' within this batch." });
+                continue;
+            }
+
+            if (await _repo.ExistsByNameAsync(name))
+            {
+                results.Add(new BulkCreateMedicineItemResultDto
+                    { Index = i, Success = false, Message = $"Medicine '{name}' already exists." });
+                continue;
+            }
+
+            toInsert.Add((i, new Medicine
+            {
+                Name                 = name,
+                GenericName          = dto.GenericName?.Trim(),
+                CategoryId           = dto.CategoryId,
+                ManufacturerId       = dto.ManufacturerId,
+                TabletsPerStrip      = dto.TabletsPerStrip,
+                StripPrice           = dto.StripPrice,
+                TabletPrice          = dto.TabletPrice,
+                ReorderLevel         = dto.ReorderLevel,
+                RequiresPrescription = dto.RequiresPrescription,
+                IsActive             = dto.IsActive,
+                CreatedAt            = DateTime.UtcNow
+            }));
+        }
+
+        // ── Persist all valid rows in one trip ────────────────────────────────
+        if (toInsert.Count > 0)
+        {
+            var saved = await _repo.CreateBulkAsync(toInsert.Select(t => t.Entity).ToList());
+
+            // Reload each saved entity with navigation properties
+            foreach (var (idx, entity) in toInsert)
+            {
+                var full = await _repo.GetByIdAsync(entity.MedicineId);
+                results.Add(new BulkCreateMedicineItemResultDto
+                {
+                    Index   = idx,
+                    Success = true,
+                    Message = "Created successfully.",
+                    Data    = MapToResponse(full!)
+                });
+            }
+        }
+
+        // Sort results back into original request order
+        results.Sort((a, b) => a.Index.CompareTo(b.Index));
+
+        return new BulkCreateMedicineResultDto
+        {
+            TotalRequested = dtos.Count,
+            TotalCreated   = results.Count(r => r.Success),
+            TotalFailed    = results.Count(r => !r.Success),
+            Results        = results
+        };
+    }
+
     public async Task<(bool Success, string Message, MedicineResponseDto? Data)> UpdateAsync(
         int id, UpdateMedicineDto dto)
     {

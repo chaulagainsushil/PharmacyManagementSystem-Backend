@@ -49,6 +49,14 @@ public class MedicineRepository : IMedicineRepository
         return medicine;
     }
 
+    public async Task<IReadOnlyList<Medicine>> CreateBulkAsync(IEnumerable<Medicine> medicines)
+    {
+        var list = medicines.ToList();
+        _db.Medicines.AddRange(list);
+        await _db.SaveChangesAsync();
+        return list;
+    }
+
     public async Task<Medicine> UpdateAsync(Medicine medicine)
     {
         _db.Medicines.Update(medicine);
