@@ -21,6 +21,10 @@ public class ApplicationDbContext : IdentityDbContext<IdentityUser>
     public DbSet<SaleItem> SaleItems => Set<SaleItem>();
     public DbSet<User> AppUsers => Set<User>();
 
+    // ── Disposal ──────────────────────────────────────────────────────────────
+    public DbSet<ExpiredMedicineDisposal> ExpiredMedicineDisposals => Set<ExpiredMedicineDisposal>();
+    public DbSet<ExpiredMedicineDisposalItem> ExpiredMedicineDisposalItems => Set<ExpiredMedicineDisposalItem>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -167,6 +171,41 @@ public class ApplicationDbContext : IdentityDbContext<IdentityUser>
             e.HasOne(si => si.Batch)
                 .WithMany(b => b.SaleItems)
                 .HasForeignKey(si => si.BatchId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // ── ExpiredMedicineDisposal ────────────────────────────────────────────
+        modelBuilder.Entity<ExpiredMedicineDisposal>(e =>
+        {
+            e.HasKey(d => d.DisposalId);
+            e.Property(d => d.DisposalNumber).IsRequired().HasMaxLength(50);
+            e.HasIndex(d => d.DisposalNumber).IsUnique();
+
+            e.HasOne(d => d.Pharmacist)
+                .WithMany()
+                .HasForeignKey(d => d.PharmacistId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // ── ExpiredMedicineDisposalItem ───────────────────────────────────────
+        modelBuilder.Entity<ExpiredMedicineDisposalItem>(e =>
+        {
+            e.HasKey(i => i.DisposalItemId);
+            e.Property(i => i.Reason).IsRequired().HasMaxLength(500);
+
+            e.HasOne(i => i.Disposal)
+                .WithMany(d => d.Items)
+                .HasForeignKey(i => i.DisposalId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            e.HasOne(i => i.Medicine)
+                .WithMany()
+                .HasForeignKey(i => i.MedicineId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasOne(i => i.Batch)
+                .WithMany()
+                .HasForeignKey(i => i.BatchId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
     }

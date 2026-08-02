@@ -11,10 +11,12 @@ namespace PMS.Controllers;
 public class MedicineController : ControllerBase
 {
     private readonly IMedicineService _service;
+    private readonly IWebHostEnvironment _env;
 
-    public MedicineController(IMedicineService service)
+    public MedicineController(IMedicineService service, IWebHostEnvironment env)
     {
         _service = service;
+        _env = env;
     }
 
     /// <summary>Get all medicines.</summary>
@@ -101,5 +103,35 @@ public class MedicineController : ControllerBase
         }
 
         return Ok(new { message });
+    }
+
+    /// <summary>Upload a prescription image and return the stored URL.</summary>
+    [HttpPost("prescription-upload")]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> UploadPrescription(IFormFile file)
+    {
+        if (file == null || file.Length == 0)
+            return BadRequest(new { message = "No file provided." });
+
+        var allowed = new[] { ".jpg", ".jpeg", ".png", ".webp", ".pdf" };
+        var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+        if (!allowed.Contains(ext))
+            return BadRequest(new { message = "Only JPG, PNG, WebP, or PDF files are accepted." });
+
+        if (file.Length > 10 * 1024 * 1024)
+            return BadRequest(new { message = "File size must not exceed 10 MB." });
+
+        var uploadDir = Path.Combine(_env.WebRootPath ?? "wwwroot", "prescriptions");
+        Directory.CreateDirectory(uploadDir);
+
+        var fileName = $"{Guid.NewGuid()}{ext}";
+        var filePath = Path.Combine(uploadDir, fileName);
+
+        await using var stream = new FileStream(filePath, FileMode.Create);
+        await file.CopyToAsync(stream);
+
+        var url = $"/prescriptions/{fileName}";
+        return Ok(new { url, fileName });
     }
 }

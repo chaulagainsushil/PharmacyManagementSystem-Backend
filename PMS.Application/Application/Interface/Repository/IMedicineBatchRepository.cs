@@ -11,4 +11,5 @@ public interface IMedicineBatchRepository
     Task<MedicineBatch> CreateAsync(MedicineBatch batch);
     Task<MedicineBatch> UpdateAsync(MedicineBatch batch);
     Task<bool> DeleteAsync(int id);
+    Task<IEnumerable<MedicineBatch>> GetNearExpiryAsync(int days);
 }

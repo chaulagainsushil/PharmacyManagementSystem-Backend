@@ -9,6 +9,13 @@ public class Medicine
     public int? ManufacturerId { get; set; }
 
     public int TabletsPerStrip { get; set; } = 1;
+
+    /// <summary>How many strips/straps are packed in one box.</summary>
+    public int StrapsPerBox { get; set; } = 1;
+
+    /// <summary>Computed: total tablets that fit in one box (TabletsPerStrip × StrapsPerBox).</summary>
+    public int TotalTabletsPerBox => TabletsPerStrip * StrapsPerBox;
+
     public decimal StripPrice { get; set; }
     public decimal TabletPrice { get; set; }
 

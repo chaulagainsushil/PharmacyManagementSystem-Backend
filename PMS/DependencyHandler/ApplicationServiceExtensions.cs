@@ -41,6 +41,14 @@ public static class ApplicationServiceExtensions
         services.AddScoped<ISaleRepository, SaleRepository>();
         services.AddScoped<ISaleService, SaleService>();
 
+        // ── Disposal ──────────────────────────────────────────────────────────
+        services.AddScoped<IDisposalRepository, DisposalRepository>();
+        services.AddScoped<IDisposalService, DisposalService>();
+
+        // ── Report ────────────────────────────────────────────────────────────
+        services.AddScoped<IReportRepository, ReportRepository>();
+        services.AddScoped<IReportService, ReportService>();
+
         return services;
     }
 }

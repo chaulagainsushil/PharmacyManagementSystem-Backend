@@ -8,6 +8,9 @@ public class MedicineListItemDto
     public string? GenericName { get; set; }
     public string? CategoryName { get; set; }
     public string? ManufacturerName { get; set; }
+    public int TabletsPerStrip { get; set; }
+    public int StrapsPerBox { get; set; }
+    public int TotalTabletsPerBox { get; set; }
     public decimal StripPrice { get; set; }
     public decimal TabletPrice { get; set; }
     public int TotalStockInTablets { get; set; }

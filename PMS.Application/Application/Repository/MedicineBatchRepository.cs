@@ -62,4 +62,15 @@ public class MedicineBatchRepository : IMedicineBatchRepository
         await _db.SaveChangesAsync();
         return true;
     }
+
+    public async Task<IEnumerable<MedicineBatch>> GetNearExpiryAsync(int days) =>
+        await _db.MedicineBatches
+            .Include(b => b.Medicine)
+            .Include(b => b.Supplier)
+            .AsNoTracking()
+            .Where(b => b.ExpiryDate.Date > DateTime.UtcNow.Date
+                     && b.ExpiryDate.Date <= DateTime.UtcNow.Date.AddDays(days)
+                     && b.QuantityInTablets > 0)
+            .OrderBy(b => b.ExpiryDate)
+            .ToListAsync();
 }

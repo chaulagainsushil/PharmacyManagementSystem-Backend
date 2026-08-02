@@ -77,6 +77,33 @@ public class MedicineBatchService : IMedicineBatchService
         return (true, "Medicine batch updated successfully.", MapToResponse(full!));
     }
 
+    public async Task<BulkCreateMedicineBatchResultDto> BulkCreateAsync(BulkCreateMedicineBatchDto dto)
+    {
+        var results = new List<BulkBatchResultItemDto>();
+        int created = 0, failed = 0;
+
+        for (int i = 0; i < dto.Batches.Count; i++)
+        {
+            var (success, message, data) = await CreateAsync(dto.Batches[i]);
+            results.Add(new BulkBatchResultItemDto
+            {
+                Index   = i,
+                Success = success,
+                Message = message,
+                Data    = data,
+            });
+            if (success) created++; else failed++;
+        }
+
+        return new BulkCreateMedicineBatchResultDto
+        {
+            TotalRequested = dto.Batches.Count,
+            TotalCreated   = created,
+            TotalFailed    = failed,
+            Results        = results,
+        };
+    }
+
     public async Task<(bool Success, string Message)> DeleteAsync(int id)
     {
         var batch = await _repo.GetByIdAsync(id);
@@ -85,6 +112,12 @@ public class MedicineBatchService : IMedicineBatchService
 
         await _repo.DeleteAsync(id);
         return (true, "Medicine batch deleted successfully.");
+    }
+
+    public async Task<IEnumerable<MedicineBatchListItemDto>> GetNearExpiryAsync(int days = 45)
+    {
+        var batches = await _repo.GetNearExpiryAsync(days);
+        return batches.Select(MapToListItem);
     }
 
     // ── Mapping helpers ────────────────────────────────────────────────────────

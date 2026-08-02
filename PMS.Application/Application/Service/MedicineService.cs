@@ -24,6 +24,9 @@ public class MedicineService : IMedicineService
             GenericName          = m.GenericName,
             CategoryName         = m.Category?.CategoryName,
             ManufacturerName     = m.Manufacturer?.Name,
+            TabletsPerStrip      = m.TabletsPerStrip,
+            StrapsPerBox         = m.StrapsPerBox,
+            TotalTabletsPerBox   = m.TotalTabletsPerBox,
             StripPrice           = m.StripPrice,
             TabletPrice          = m.TabletPrice,
             TotalStockInTablets  = m.TotalStockInTablets,
@@ -53,6 +56,7 @@ public class MedicineService : IMedicineService
             CategoryId           = dto.CategoryId,
             ManufacturerId       = dto.ManufacturerId,
             TabletsPerStrip      = dto.TabletsPerStrip,
+            StrapsPerBox         = dto.StrapsPerBox,
             StripPrice           = dto.StripPrice,
             TabletPrice          = dto.TabletPrice,
             ReorderLevel         = dto.ReorderLevel,
@@ -110,6 +114,7 @@ public class MedicineService : IMedicineService
                 CategoryId           = dto.CategoryId,
                 ManufacturerId       = dto.ManufacturerId,
                 TabletsPerStrip      = dto.TabletsPerStrip,
+                StrapsPerBox         = dto.StrapsPerBox,
                 StripPrice           = dto.StripPrice,
                 TabletPrice          = dto.TabletPrice,
                 ReorderLevel         = dto.ReorderLevel,
@@ -165,6 +170,7 @@ public class MedicineService : IMedicineService
         medicine.CategoryId           = dto.CategoryId;
         medicine.ManufacturerId       = dto.ManufacturerId;
         medicine.TabletsPerStrip      = dto.TabletsPerStrip;
+        medicine.StrapsPerBox         = dto.StrapsPerBox;
         medicine.StripPrice           = dto.StripPrice;
         medicine.TabletPrice          = dto.TabletPrice;
         medicine.ReorderLevel         = dto.ReorderLevel;
@@ -199,6 +205,8 @@ public class MedicineService : IMedicineService
         ManufacturerId       = m.ManufacturerId,
         ManufacturerName     = m.Manufacturer?.Name,
         TabletsPerStrip      = m.TabletsPerStrip,
+        StrapsPerBox         = m.StrapsPerBox,
+        TotalTabletsPerBox   = m.TotalTabletsPerBox,
         StripPrice           = m.StripPrice,
         TabletPrice          = m.TabletPrice,
         ReorderLevel         = m.ReorderLevel,

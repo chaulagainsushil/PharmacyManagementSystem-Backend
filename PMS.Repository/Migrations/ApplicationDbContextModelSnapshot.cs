@@ -269,6 +269,79 @@ namespace PMS.Repository.Migrations
                     b.ToTable("Customers");
                 });
 
+            modelBuilder.Entity("PMS.Models.Models.ExpiredMedicineDisposal", b =>
+                {
+                    b.Property<int>("DisposalId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("DisposalId"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("DisposalDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DisposalNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<int>("PharmacistId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("UserId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("DisposalId");
+
+                    b.HasIndex("DisposalNumber")
+                        .IsUnique();
+
+                    b.HasIndex("PharmacistId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("ExpiredMedicineDisposals");
+                });
+
+            modelBuilder.Entity("PMS.Models.Models.ExpiredMedicineDisposalItem", b =>
+                {
+                    b.Property<int>("DisposalItemId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("DisposalItemId"));
+
+                    b.Property<int>("BatchId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("DisposalId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("MedicineId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("QuantityInTablets")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.HasKey("DisposalItemId");
+
+                    b.HasIndex("BatchId");
+
+                    b.HasIndex("DisposalId");
+
+                    b.HasIndex("MedicineId");
+
+                    b.ToTable("ExpiredMedicineDisposalItems");
+                });
+
             modelBuilder.Entity("PMS.Models.Models.Manufacturer", b =>
                 {
                     b.Property<int>("ManufacturerId")
@@ -321,6 +394,9 @@ namespace PMS.Repository.Migrations
 
                     b.Property<bool>("RequiresPrescription")
                         .HasColumnType("boolean");
+
+                    b.Property<int>("StrapsPerBox")
+                        .HasColumnType("integer");
 
                     b.Property<decimal>("StripPrice")
                         .HasColumnType("numeric(18,4)");
@@ -585,6 +661,48 @@ namespace PMS.Repository.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("PMS.Models.Models.ExpiredMedicineDisposal", b =>
+                {
+                    b.HasOne("PMS.Models.Models.User", "Pharmacist")
+                        .WithMany()
+                        .HasForeignKey("PharmacistId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("PMS.Models.Models.User", null)
+                        .WithMany("Disposals")
+                        .HasForeignKey("UserId");
+
+                    b.Navigation("Pharmacist");
+                });
+
+            modelBuilder.Entity("PMS.Models.Models.ExpiredMedicineDisposalItem", b =>
+                {
+                    b.HasOne("PMS.Models.Models.MedicineBatch", "Batch")
+                        .WithMany()
+                        .HasForeignKey("BatchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("PMS.Models.Models.ExpiredMedicineDisposal", "Disposal")
+                        .WithMany("Items")
+                        .HasForeignKey("DisposalId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("PMS.Models.Models.Medicine", "Medicine")
+                        .WithMany()
+                        .HasForeignKey("MedicineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Batch");
+
+                    b.Navigation("Disposal");
+
+                    b.Navigation("Medicine");
+                });
+
             modelBuilder.Entity("PMS.Models.Models.Medicine", b =>
                 {
                     b.HasOne("PMS.Models.Models.Category", "Category")
@@ -676,6 +794,11 @@ namespace PMS.Repository.Migrations
                     b.Navigation("Sales");
                 });
 
+            modelBuilder.Entity("PMS.Models.Models.ExpiredMedicineDisposal", b =>
+                {
+                    b.Navigation("Items");
+                });
+
             modelBuilder.Entity("PMS.Models.Models.Manufacturer", b =>
                 {
                     b.Navigation("Medicines");
@@ -705,6 +828,8 @@ namespace PMS.Repository.Migrations
 
             modelBuilder.Entity("PMS.Models.Models.User", b =>
                 {
+                    b.Navigation("Disposals");
+
                     b.Navigation("Sales");
                 });
 #pragma warning restore 612, 618

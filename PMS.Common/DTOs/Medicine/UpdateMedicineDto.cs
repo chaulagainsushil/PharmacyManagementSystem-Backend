@@ -17,6 +17,9 @@ public class UpdateMedicineDto
     [Range(1, int.MaxValue, ErrorMessage = "TabletsPerStrip must be at least 1.")]
     public int TabletsPerStrip { get; set; } = 1;
 
+    [Range(1, int.MaxValue, ErrorMessage = "StrapsPerBox must be at least 1.")]
+    public int StrapsPerBox { get; set; } = 1;
+
     [Range(0, double.MaxValue, ErrorMessage = "Strip price must be non-negative.")]
     public decimal StripPrice { get; set; }
 

@@ -26,6 +26,12 @@ public class MedicineBatchController : ControllerBase
     public async Task<IActionResult> GetByMedicineId(int medicineId)
         => Ok(await _service.GetByMedicineIdAsync(medicineId));
 
+    /// <summary>Get batches expiring within the given number of days (default 45).</summary>
+    [HttpGet("near-expiry")]
+    [ProducesResponseType(typeof(IEnumerable<MedicineBatchListItemDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> NearExpiry([FromQuery] int days = 45)
+        => Ok(await _service.GetNearExpiryAsync(days));
+
     /// <summary>Get a medicine batch by ID.</summary>
     [HttpGet("{id:int}")]
     [ProducesResponseType(typeof(MedicineBatchResponseDto), StatusCodes.Status200OK)]
@@ -48,6 +54,20 @@ public class MedicineBatchController : ControllerBase
         if (!success) return BadRequest(new { message });
 
         return CreatedAtAction(nameof(GetById), new { id = data!.BatchId }, data);
+    }
+
+    /// <summary>Bulk-create multiple medicine batches in one request.</summary>
+    [HttpPost("bulk")]
+    [ProducesResponseType(typeof(BulkCreateMedicineBatchResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> BulkCreate([FromBody] BulkCreateMedicineBatchDto dto)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+        if (dto.Batches == null || dto.Batches.Count == 0)
+            return BadRequest(new { message = "At least one batch is required." });
+
+        var result = await _service.BulkCreateAsync(dto);
+        return Ok(result);
     }
 
     /// <summary>Update an existing medicine batch.</summary>
