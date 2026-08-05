@@ -181,10 +181,10 @@ namespace PMS.Repository.Migrations
                     ""BaseQuantityDeducted"" = si.""Quantity""
                 FROM ""MedicineUnits"" mu
                 WHERE mu.""MedicineId""      = si.""MedicineId""
-                  AND mu.""UnitOfMeasureId"" = 1   -- Tablet
+                  AND mu.""UnitOfMeasureId"" = 1
                   AND si.""SaleUnitType""    = 'Tablet';
 
-                -- Strip sales: link to the Strip MedicineUnit (conversion already in Quantity×TabletsPerStrip)
+                -- Strip sales: link to the Strip MedicineUnit
                 UPDATE ""SaleItems"" si
                 SET
                     ""MedicineUnitId"" = mu.""MedicineUnitId"",
@@ -192,9 +192,8 @@ namespace PMS.Repository.Migrations
                         si.""Quantity"" * mu.""ConversionFactorToBase"" AS integer
                     )
                 FROM ""MedicineUnits"" mu
-                JOIN ""Medicines"" m ON m.""MedicineId"" = si.""MedicineId""
                 WHERE mu.""MedicineId""      = si.""MedicineId""
-                  AND mu.""UnitOfMeasureId"" = 2   -- Strip
+                  AND mu.""UnitOfMeasureId"" = 2
                   AND si.""SaleUnitType""    = 'Strip';
 
                 -- Safety fallback: any row still NULL gets the Tablet unit
@@ -204,7 +203,7 @@ namespace PMS.Repository.Migrations
                     ""BaseQuantityDeducted"" = COALESCE(si.""BaseQuantityDeducted"", si.""Quantity"")
                 FROM ""MedicineUnits"" mu
                 WHERE mu.""MedicineId""      = si.""MedicineId""
-                  AND mu.""UnitOfMeasureId"" = 1   -- Tablet
+                  AND mu.""UnitOfMeasureId"" = 1
                   AND si.""MedicineUnitId""  IS NULL;
             ");
 

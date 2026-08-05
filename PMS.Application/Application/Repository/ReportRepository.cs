@@ -76,24 +76,29 @@ public class ReportRepository : IReportRepository
 
     public async Task<List<LowStockItemDto>> GetLowStockAsync()
     {
-        return await _db.Medicines
+        // TotalStockInTablets is a computed property ignored by EF, so we load to client first.
+        var medicines = await _db.Medicines
             .Include(m => m.Category)
             .Include(m => m.Manufacturer)
             .Include(m => m.Batches)
-            .Where(m => m.IsActive && m.TotalStockInTablets <= m.ReorderLevel)
+            .Where(m => m.IsActive)
+            .ToListAsync();
+
+        return medicines
+            .Where(m => m.TotalStockInTablets <= m.ReorderLevel)
             .OrderBy(m => m.TotalStockInTablets)
             .Select(m => new LowStockItemDto
             {
                 MedicineId          = m.MedicineId,
                 MedicineName        = m.Name,
                 GenericName         = m.GenericName,
-                CategoryName        = m.Category != null ? m.Category.CategoryName : null,
-                ManufacturerName    = m.Manufacturer != null ? m.Manufacturer.Name : null,
+                CategoryName        = m.Category?.CategoryName,
+                ManufacturerName    = m.Manufacturer?.Name,
                 TotalStockInTablets = m.TotalStockInTablets,
                 ReorderLevel        = m.ReorderLevel,
                 ShortfallInTablets  = m.ReorderLevel - m.TotalStockInTablets,
             })
-            .ToListAsync();
+            .ToList();
     }
 
     // ── Stock Consumption ─────────────────────────────────────────────────────
@@ -101,8 +106,8 @@ public class ReportRepository : IReportRepository
     public async Task<StockConsumptionReportDto> GetStockConsumptionAsync(
         DateTime? from, DateTime? to, int? supplierId, int? manufacturerId, string sortBy)
     {
-        var toDate = (to ?? DateTime.UtcNow).Date.AddDays(1); // inclusive end of to-date
-        var fromDate = from?.Date ?? DateTime.MinValue;
+        var toDate   = DateTime.SpecifyKind((to   ?? DateTime.UtcNow).Date.AddDays(1), DateTimeKind.Utc);
+        var fromDate = DateTime.SpecifyKind((from ?? DateTime.MinValue).Date,           DateTimeKind.Utc);
 
         var query = _db.SaleItems
             .Include(si => si.Medicine)
