@@ -44,6 +44,14 @@ public class MedicineService : IMedicineService
         if (await _repo.ExistsByNameAsync(dto.Name))
             return (false, $"Medicine '{dto.Name}' already exists.", null);
 
+        // Validate inline units if provided
+        if (dto.Units is { Count: > 0 })
+        {
+            var unitError = ValidateInlineUnits(dto.Units);
+            if (unitError is not null)
+                return (false, unitError, null);
+        }
+
         var medicine = new Medicine
         {
             Name                 = dto.Name.Trim(),
@@ -62,7 +70,13 @@ public class MedicineService : IMedicineService
 
         var created = await _repo.CreateAsync(medicine);
 
-        // Reload with navigation properties for the response
+        // Attach units inline if provided
+        if (dto.Units is { Count: > 0 })
+        {
+            var units = BuildMedicineUnits(created.MedicineId, dto.Units);
+            await _repo.ReplaceUnitsAsync(created.MedicineId, units);
+        }
+
         var full = await _repo.GetByIdAsync(created.MedicineId);
         return (true, "Medicine created successfully.", MapToResponse(full!));
     }
@@ -70,10 +84,8 @@ public class MedicineService : IMedicineService
     public async Task<BulkCreateMedicineResultDto> CreateBulkAsync(IReadOnlyList<CreateMedicineDto> dtos)
     {
         var results  = new List<BulkCreateMedicineItemResultDto>(dtos.Count);
-        var toInsert = new List<(int Index, Medicine Entity)>();
+        var toInsert = new List<(int Index, Medicine Entity, List<CreateMedicineUnitDto>? Units)>();
 
-        // ── Per-row validation (duplicate name check) ─────────────────────────
-        // Track names already seen within this batch to catch intra-batch dupes.
         var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         for (int i = 0; i < dtos.Count; i++)
@@ -102,6 +114,17 @@ public class MedicineService : IMedicineService
                 continue;
             }
 
+            if (dto.Units is { Count: > 0 })
+            {
+                var unitError = ValidateInlineUnits(dto.Units);
+                if (unitError is not null)
+                {
+                    results.Add(new BulkCreateMedicineItemResultDto
+                        { Index = i, Success = false, Message = unitError });
+                    continue;
+                }
+            }
+
             toInsert.Add((i, new Medicine
             {
                 Name                 = name,
@@ -116,17 +139,21 @@ public class MedicineService : IMedicineService
                 RequiresPrescription = dto.RequiresPrescription,
                 IsActive             = dto.IsActive,
                 CreatedAt            = DateTime.UtcNow
-            }));
+            }, dto.Units));
         }
 
-        // ── Persist all valid rows in one trip ────────────────────────────────
         if (toInsert.Count > 0)
         {
             var saved = await _repo.CreateBulkAsync(toInsert.Select(t => t.Entity).ToList());
 
-            // Reload each saved entity with navigation properties
-            foreach (var (idx, entity) in toInsert)
+            foreach (var (idx, entity, unitDtos) in toInsert)
             {
+                if (unitDtos is { Count: > 0 })
+                {
+                    var units = BuildMedicineUnits(entity.MedicineId, unitDtos);
+                    await _repo.ReplaceUnitsAsync(entity.MedicineId, units);
+                }
+
                 var full = await _repo.GetByIdAsync(entity.MedicineId);
                 results.Add(new BulkCreateMedicineItemResultDto
                 {
@@ -138,7 +165,6 @@ public class MedicineService : IMedicineService
             }
         }
 
-        // Sort results back into original request order
         results.Sort((a, b) => a.Index.CompareTo(b.Index));
 
         return new BulkCreateMedicineResultDto
@@ -160,6 +186,14 @@ public class MedicineService : IMedicineService
         if (await _repo.ExistsByNameAsync(dto.Name, excludeId: id))
             return (false, $"Medicine '{dto.Name}' already exists.", null);
 
+        // Validate inline units if provided
+        if (dto.Units is { Count: > 0 })
+        {
+            var unitError = ValidateInlineUnits(dto.Units);
+            if (unitError is not null)
+                return (false, unitError, null);
+        }
+
         medicine.Name                 = dto.Name.Trim();
         medicine.GenericName          = dto.GenericName?.Trim();
         medicine.CategoryId           = dto.CategoryId;
@@ -174,7 +208,13 @@ public class MedicineService : IMedicineService
 
         await _repo.UpdateAsync(medicine);
 
-        // Reload with navigation properties
+        // Replace units only when explicitly supplied
+        if (dto.Units is { Count: > 0 })
+        {
+            var units = BuildMedicineUnits(id, dto.Units);
+            await _repo.ReplaceUnitsAsync(id, units);
+        }
+
         var full = await _repo.GetByIdAsync(id);
         return (true, "Medicine updated successfully.", MapToResponse(full!));
     }
@@ -189,7 +229,57 @@ public class MedicineService : IMedicineService
         return (true, "Medicine deleted successfully.");
     }
 
-    // ── Mapping helper ─────────────────────────────────────────────────────────
+    // ── Validation ─────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Returns an error message if the inline units list is invalid, or null if valid.
+    /// Rules:
+    ///   - Exactly one IsBaseUnit = true
+    ///   - Exactly one IsDefault = true
+    ///   - No duplicate UnitOfMeasureId values
+    ///   - The base unit must have ConversionFactorToBase = 1
+    /// </summary>
+    private static string? ValidateInlineUnits(List<CreateMedicineUnitDto> units)
+    {
+        var baseCount    = units.Count(u => u.IsBaseUnit);
+        var defaultCount = units.Count(u => u.IsDefault);
+
+        if (baseCount != 1)
+            return $"Exactly one unit must be marked as the base unit (IsBaseUnit=true). Found {baseCount}.";
+
+        if (defaultCount != 1)
+            return $"Exactly one unit must be marked as the default (IsDefault=true). Found {defaultCount}.";
+
+        var duplicateUom = units
+            .GroupBy(u => u.UnitOfMeasureId)
+            .FirstOrDefault(g => g.Count() > 1);
+
+        if (duplicateUom is not null)
+            return $"Duplicate UnitOfMeasureId {duplicateUom.Key} in the units list.";
+
+        var baseUnit = units.Single(u => u.IsBaseUnit);
+        if (baseUnit.ConversionFactorToBase != 1m)
+            return "The base unit must have ConversionFactorToBase = 1.";
+
+        return null;
+    }
+
+    // ── Helpers ────────────────────────────────────────────────────────────────
+
+    private static List<MedicineUnit> BuildMedicineUnits(int medicineId, List<CreateMedicineUnitDto> dtos) =>
+        dtos.Select(u => new MedicineUnit
+        {
+            MedicineId             = medicineId,
+            UnitOfMeasureId        = u.UnitOfMeasureId,
+            ConversionFactorToBase = u.IsBaseUnit ? 1m : u.ConversionFactorToBase,
+            IsBaseUnit             = u.IsBaseUnit,
+            IsDefault              = u.IsDefault,
+            IsActive               = true,
+            UnitPrice              = u.UnitPrice
+        }).ToList();
+
+    // ── Mapping ────────────────────────────────────────────────────────────────
+
     private static MedicineListItemDto MapToListItem(Medicine m) => new()
     {
         MedicineId           = m.MedicineId,

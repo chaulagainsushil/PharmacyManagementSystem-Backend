@@ -31,4 +31,11 @@ public class UpdateMedicineDto
 
     public bool RequiresPrescription { get; set; }
     public bool IsActive { get; set; }
+
+    /// <summary>
+    /// When provided, replaces all existing units for this medicine.
+    /// Must include exactly one IsBaseUnit=true and exactly one IsDefault=true.
+    /// When omitted (null), existing units are left untouched.
+    /// </summary>
+    public List<CreateMedicineUnitDto>? Units { get; set; }
 }

@@ -12,4 +12,10 @@ public interface IMedicineRepository
     Task<IReadOnlyList<Medicine>> CreateBulkAsync(IEnumerable<Medicine> medicines);
     Task<Medicine> UpdateAsync(Medicine medicine);
     Task<bool> DeleteAsync(int id);
+
+    /// <summary>
+    /// Removes all existing MedicineUnit rows for the medicine and inserts the new ones
+    /// in a single transaction.
+    /// </summary>
+    Task ReplaceUnitsAsync(int medicineId, IEnumerable<MedicineUnit> newUnits);
 }

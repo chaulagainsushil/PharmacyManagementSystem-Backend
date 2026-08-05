@@ -92,4 +92,29 @@ public class MedicineRepository : IMedicineRepository
         await _db.SaveChangesAsync();
         return true;
     }
+
+    public async Task ReplaceUnitsAsync(int medicineId, IEnumerable<MedicineUnit> newUnits)
+    {
+        await using var transaction = await _db.Database.BeginTransactionAsync();
+        try
+        {
+            // Remove all existing units for this medicine
+            var existing = await _db.MedicineUnits
+                .Where(mu => mu.MedicineId == medicineId)
+                .ToListAsync();
+
+            _db.MedicineUnits.RemoveRange(existing);
+
+            // Insert the new units
+            _db.MedicineUnits.AddRange(newUnits);
+
+            await _db.SaveChangesAsync();
+            await transaction.CommitAsync();
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
 }
