@@ -37,6 +37,13 @@ public static class ApplicationServiceExtensions
         services.AddScoped<IMedicineBatchRepository, MedicineBatchRepository>();
         services.AddScoped<IMedicineBatchService, MedicineBatchService>();
 
+        // ── Unit of Measure ───────────────────────────────────────────────────
+        services.AddScoped<IUnitOfMeasureRepository, UnitOfMeasureRepository>();
+        services.AddScoped<IUnitOfMeasureService, UnitOfMeasureService>();
+
+        services.AddScoped<IMedicineUnitRepository, MedicineUnitRepository>();
+        services.AddScoped<IMedicineUnitService, MedicineUnitService>();
+
         // ── Sale ──────────────────────────────────────────────────────────────
         services.AddScoped<ISaleRepository, SaleRepository>();
         services.AddScoped<ISaleService, SaleService>();
@@ -48,6 +55,10 @@ public static class ApplicationServiceExtensions
         // ── Report ────────────────────────────────────────────────────────────
         services.AddScoped<IReportRepository, ReportRepository>();
         services.AddScoped<IReportService, ReportService>();
+
+        // ── Pharmacy Profile ──────────────────────────────────────────────────
+        services.AddScoped<IPharmacyProfileRepository, PharmacyProfileRepository>();
+        services.AddScoped<IPharmacyProfileService, PharmacyProfileService>();
 
         return services;
     }

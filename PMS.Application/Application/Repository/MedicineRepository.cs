@@ -25,6 +25,23 @@ public class MedicineRepository : IMedicineRepository
             .ToListAsync();
     }
 
+    public async Task<IEnumerable<Medicine>> SearchAsync(string query)
+    {
+        var q = query.Trim().ToLower();
+        return await _db.Medicines
+            .Include(m => m.Category)
+            .Include(m => m.Manufacturer)
+            .Include(m => m.Batches)
+            .AsNoTracking()
+            .Where(m =>
+                m.Name.ToLower().Contains(q) ||
+                (m.GenericName != null && m.GenericName.ToLower().Contains(q)) ||
+                (m.Category != null && m.Category.CategoryName.ToLower().Contains(q)) ||
+                (m.Manufacturer != null && m.Manufacturer.Name.ToLower().Contains(q)))
+            .OrderBy(m => m.Name)
+            .ToListAsync();
+    }
+
     public async Task<Medicine?> GetByIdAsync(int id)
     {
         return await _db.Medicines

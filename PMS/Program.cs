@@ -35,6 +35,9 @@ builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
+// ── Seed roles ────────────────────────────────────────────────────────────────
+await app.SeedRolesAsync();
+
 // ── Middleware pipeline ───────────────────────────────────────────────────────
 if (app.Environment.IsDevelopment())
 {
@@ -42,6 +45,11 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors("MyAppPolicy");
+
+// Serves files from wwwroot — includes:
+//   /prescriptions/*        (prescription images)
+//   /pharmacy/logos/*       (pharmacy logo images)
+//   /pharmacy/signatures/*  (authorised signature images)
 app.UseStaticFiles();
 app.UseHttpsRedirection();
 app.UseAuthentication();

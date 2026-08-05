@@ -459,6 +459,126 @@ namespace PMS.Repository.Migrations
                     b.ToTable("MedicineBatches");
                 });
 
+            modelBuilder.Entity("PMS.Models.Models.MedicineUnit", b =>
+                {
+                    b.Property<int>("MedicineUnitId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("MedicineUnitId"));
+
+                    b.Property<decimal>("ConversionFactorToBase")
+                        .HasColumnType("numeric(18,6)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsBaseUnit")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("MedicineId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("UnitOfMeasureId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("UnitPrice")
+                        .HasColumnType("numeric(18,4)");
+
+                    b.HasKey("MedicineUnitId");
+
+                    b.HasIndex("UnitOfMeasureId");
+
+                    b.HasIndex("MedicineId", "IsBaseUnit")
+                        .IsUnique()
+                        .HasDatabaseName("IX_MedicineUnits_MedicineId_IsBaseUnit_Unique")
+                        .HasFilter("is_base_unit = true");
+
+                    b.HasIndex("MedicineId", "IsDefault")
+                        .IsUnique()
+                        .HasDatabaseName("IX_MedicineUnits_MedicineId_IsDefault_Unique")
+                        .HasFilter("is_default = true");
+
+                    b.HasIndex("MedicineId", "UnitOfMeasureId")
+                        .IsUnique();
+
+                    b.ToTable("MedicineUnits");
+                });
+
+            modelBuilder.Entity("PMS.Models.Models.PharmacyPhoneNumber", b =>
+                {
+                    b.Property<int>("PharmacyPhoneNumberId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("PharmacyPhoneNumberId"));
+
+                    b.Property<string>("Label")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<int>("PharmacyProfileId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("PhoneNumber")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.HasKey("PharmacyPhoneNumberId");
+
+                    b.HasIndex("PharmacyProfileId");
+
+                    b.ToTable("PharmacyPhoneNumbers");
+                });
+
+            modelBuilder.Entity("PMS.Models.Models.PharmacyProfile", b =>
+                {
+                    b.Property<int>("PharmacyProfileId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("PharmacyProfileId"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Location")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("LogoUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("PanNumber")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("PharmacyName")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<string>("SignatureUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("VatNumber")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.HasKey("PharmacyProfileId");
+
+                    b.ToTable("PharmacyProfiles");
+                });
+
             modelBuilder.Entity("PMS.Models.Models.Sale", b =>
                 {
                     b.Property<int>("SaleId")
@@ -521,6 +641,9 @@ namespace PMS.Repository.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("SaleItemId"));
 
+                    b.Property<int>("BaseQuantityDeducted")
+                        .HasColumnType("integer");
+
                     b.Property<int>("BatchId")
                         .HasColumnType("integer");
 
@@ -536,16 +659,14 @@ namespace PMS.Repository.Migrations
                     b.Property<int>("MedicineId")
                         .HasColumnType("integer");
 
+                    b.Property<int>("MedicineUnitId")
+                        .HasColumnType("integer");
+
                     b.Property<int>("Quantity")
                         .HasColumnType("integer");
 
                     b.Property<int>("SaleId")
                         .HasColumnType("integer");
-
-                    b.Property<string>("SaleUnitType")
-                        .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
 
                     b.Property<decimal>("UnitPrice")
                         .HasColumnType("numeric(18,4)");
@@ -555,6 +676,8 @@ namespace PMS.Repository.Migrations
                     b.HasIndex("BatchId");
 
                     b.HasIndex("MedicineId");
+
+                    b.HasIndex("MedicineUnitId");
 
                     b.HasIndex("SaleId");
 
@@ -585,6 +708,35 @@ namespace PMS.Repository.Migrations
                     b.HasKey("SupplierId");
 
                     b.ToTable("Suppliers");
+                });
+
+            modelBuilder.Entity("PMS.Models.Models.UnitOfMeasure", b =>
+                {
+                    b.Property<int>("UnitOfMeasureId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("UnitOfMeasureId"));
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Symbol")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.HasKey("UnitOfMeasureId");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("UnitsOfMeasure");
                 });
 
             modelBuilder.Entity("PMS.Models.Models.User", b =>
@@ -738,6 +890,36 @@ namespace PMS.Repository.Migrations
                     b.Navigation("Supplier");
                 });
 
+            modelBuilder.Entity("PMS.Models.Models.MedicineUnit", b =>
+                {
+                    b.HasOne("PMS.Models.Models.Medicine", "Medicine")
+                        .WithMany("Units")
+                        .HasForeignKey("MedicineId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("PMS.Models.Models.UnitOfMeasure", "UnitOfMeasure")
+                        .WithMany("MedicineUnits")
+                        .HasForeignKey("UnitOfMeasureId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Medicine");
+
+                    b.Navigation("UnitOfMeasure");
+                });
+
+            modelBuilder.Entity("PMS.Models.Models.PharmacyPhoneNumber", b =>
+                {
+                    b.HasOne("PMS.Models.Models.PharmacyProfile", "PharmacyProfile")
+                        .WithMany("PhoneNumbers")
+                        .HasForeignKey("PharmacyProfileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("PharmacyProfile");
+                });
+
             modelBuilder.Entity("PMS.Models.Models.Sale", b =>
                 {
                     b.HasOne("PMS.Models.Models.Customer", "Customer")
@@ -771,6 +953,12 @@ namespace PMS.Repository.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("PMS.Models.Models.MedicineUnit", "MedicineUnit")
+                        .WithMany()
+                        .HasForeignKey("MedicineUnitId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("PMS.Models.Models.Sale", "Sale")
                         .WithMany("SaleItems")
                         .HasForeignKey("SaleId")
@@ -780,6 +968,8 @@ namespace PMS.Repository.Migrations
                     b.Navigation("Batch");
 
                     b.Navigation("Medicine");
+
+                    b.Navigation("MedicineUnit");
 
                     b.Navigation("Sale");
                 });
@@ -809,11 +999,18 @@ namespace PMS.Repository.Migrations
                     b.Navigation("Batches");
 
                     b.Navigation("SaleItems");
+
+                    b.Navigation("Units");
                 });
 
             modelBuilder.Entity("PMS.Models.Models.MedicineBatch", b =>
                 {
                     b.Navigation("SaleItems");
+                });
+
+            modelBuilder.Entity("PMS.Models.Models.PharmacyProfile", b =>
+                {
+                    b.Navigation("PhoneNumbers");
                 });
 
             modelBuilder.Entity("PMS.Models.Models.Sale", b =>
@@ -824,6 +1021,11 @@ namespace PMS.Repository.Migrations
             modelBuilder.Entity("PMS.Models.Models.Supplier", b =>
                 {
                     b.Navigation("Batches");
+                });
+
+            modelBuilder.Entity("PMS.Models.Models.UnitOfMeasure", b =>
+                {
+                    b.Navigation("MedicineUnits");
                 });
 
             modelBuilder.Entity("PMS.Models.Models.User", b =>

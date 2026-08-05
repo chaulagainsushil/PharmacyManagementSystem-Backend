@@ -23,4 +23,13 @@ public interface IAuthRepository
     /// Used to obtain the PharmacistId for sale creation.
     /// </summary>
     Task<User> GetOrCreateAppUserAsync(IdentityUser identityUser, string fullName);
+
+    /// <summary>
+    /// Assigns a single role to the given Identity user.
+    /// The role must already exist (seeded at startup).
+    /// </summary>
+    Task<IdentityResult> AssignRoleAsync(IdentityUser user, string role);
+
+    /// <summary>Finds an Identity user by their email address.</summary>
+    Task<IdentityUser?> FindByEmailAsync(string email);
 }

@@ -5,6 +5,7 @@ namespace PMS.Application.Application.Interface.Service;
 public interface IMedicineService
 {
     Task<IEnumerable<MedicineListItemDto>> GetAllAsync();
+    Task<IEnumerable<MedicineListItemDto>> SearchAsync(string query);
     Task<MedicineResponseDto?> GetByIdAsync(int id);
     Task<(bool Success, string Message, MedicineResponseDto? Data)> CreateAsync(CreateMedicineDto dto);
     Task<BulkCreateMedicineResultDto> CreateBulkAsync(IReadOnlyList<CreateMedicineDto> dtos);

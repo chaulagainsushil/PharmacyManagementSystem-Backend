@@ -19,4 +19,12 @@ public class SignupDto
     [Required]
     [Compare(nameof(Password), ErrorMessage = "Passwords do not match.")]
     public string ConfirmPassword { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Role to assign to the new account.
+    /// Must be one of the values defined in <see cref="AppRoles"/>.
+    /// Only a SystemAdmin may assign SystemAdmin or PharmacyAdmin roles.
+    /// Defaults to <see cref="AppRoles.Pharmacist"/> when not provided.
+    /// </summary>
+    public string? Role { get; set; }
 }

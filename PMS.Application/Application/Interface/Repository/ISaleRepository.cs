@@ -5,10 +5,11 @@ namespace PMS.Application.Application.Interface.Repository;
 public interface ISaleRepository
 {
     /// <summary>
-    /// Fetch a medicine with its non-expired, in-stock batches ordered by FEFO
-    /// (nearest expiry first). Returns null if medicine not found or inactive.
+    /// Fetch a medicine with its active MedicineUnits AND non-expired, in-stock batches
+    /// ordered by FEFO (nearest expiry first).
+    /// Returns null if medicine not found or inactive.
     /// </summary>
-    Task<Medicine?> GetMedicineWithFefoStockAsync(int medicineId);
+    Task<Medicine?> GetMedicineWithUnitsAndFefoStockAsync(int medicineId);
 
     /// <summary>Returns true if the customer exists.</summary>
     Task<bool> CustomerExistsAsync(int customerId);
@@ -21,7 +22,7 @@ public interface ISaleRepository
     /// and deducts <paramref name="batchDeductions"/> from MedicineBatch.QuantityInTablets —
     /// all inside a single database transaction.
     /// </summary>
-    Task<Sale> SaveSaleAsync(Sale sale, IReadOnlyList<(int BatchId, int TabletsToDeduct)> batchDeductions);
+    Task<Sale> SaveSaleAsync(Sale sale, IReadOnlyList<(int BatchId, int BaseUnitsToDeduct)> batchDeductions);
 
     /// <summary>
     /// Reload a sale with all navigation properties needed for the response DTO.

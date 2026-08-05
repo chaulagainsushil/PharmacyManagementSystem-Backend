@@ -1,7 +1,6 @@
 using PMS.Application.Application.Interface.Repository;
 using PMS.Application.Application.Interface.Service;
 using PMS.Common.DTOs.Sale;
-using PMS.Models.Enums;
 using PMS.Models.Models;
 
 namespace PMS.Application.Application.Service;
@@ -29,71 +28,69 @@ public class SaleService : ISaleService
 
         // ── 2. Validate each line item and plan FEFO deductions ───────────────
         //
-        // We collect everything we need before touching the DB inside the
-        // transaction so we can give clear error messages up-front.
-        //
         // plannedItems     — one entry per (MedicineId, BatchId) pairing produced
-        //                    by FEFO splitting across batches.
-        // batchDeductions  — flat list of (BatchId, tablets) sent to the repo.
+        //                    by FEFO splitting.
+        // batchDeductions  — flat list of (BatchId, baseUnits) for the repo.
 
         var plannedItems    = new List<PlannedSaleItem>();
-        var batchDeductions = new List<(int BatchId, int TabletsToDeduct)>();
+        var batchDeductions = new List<(int BatchId, int BaseUnitsToDeduct)>();
 
         foreach (var itemDto in dto.Items)
         {
-            // Load medicine + its eligible FEFO batches
-            var medicine = await _repo.GetMedicineWithFefoStockAsync(itemDto.MedicineId);
+            // Load medicine with its active MedicineUnits and FEFO batches
+            var medicine = await _repo.GetMedicineWithUnitsAndFefoStockAsync(itemDto.MedicineId);
             if (medicine is null)
                 return (false, $"Medicine with ID {itemDto.MedicineId} not found or inactive.", null);
 
-            // Convert requested quantity to tablets
-            var tabletsRequested = itemDto.SaleUnitType == SaleUnitType.Strip
-                ? itemDto.Quantity * medicine.TabletsPerStrip
-                : itemDto.Quantity;
+            // Validate the requested MedicineUnit belongs to this medicine
+            var saleUnit = medicine.Units.FirstOrDefault(u => u.MedicineUnitId == itemDto.MedicineUnitId);
+            if (saleUnit is null)
+                return (false,
+                    $"MedicineUnit {itemDto.MedicineUnitId} is not attached to medicine '{medicine.Name}'.",
+                    null);
 
-            // Determine unit price (snapshot at sale time)
-            var unitPrice = itemDto.SaleUnitType == SaleUnitType.Strip
-                ? medicine.StripPrice
-                : medicine.TabletPrice;
+            // Convert requested quantity to base units (e.g. 2 strips × 10 tablets/strip = 20 tablets)
+            var baseUnitsRequested = medicine.ConvertToBaseQuantity(itemDto.MedicineUnitId, itemDto.Quantity);
+
+            // Price snapshot from MedicineUnit at sale time
+            var unitPrice = saleUnit.UnitPrice;
 
             // Check total available stock across non-expired batches
             var totalAvailable = medicine.Batches.Sum(b => b.QuantityInTablets);
-            if (totalAvailable < tabletsRequested)
+            if (totalAvailable < baseUnitsRequested)
                 return (false,
                     $"Insufficient stock for '{medicine.Name}'. " +
-                    $"Requested {tabletsRequested} tablet(s) but only {totalAvailable} available.",
+                    $"Requested {baseUnitsRequested} base unit(s) but only {totalAvailable} available.",
                     null);
 
             // ── FEFO split: drain batches from nearest expiry first ────────────
-            var remaining = tabletsRequested;
-            foreach (var batch in medicine.Batches) // already sorted by ExpiryDate ASC
+            // This logic is unchanged — batches are already sorted ExpiryDate ASC.
+            var remaining = baseUnitsRequested;
+            foreach (var batch in medicine.Batches)
             {
                 if (remaining <= 0) break;
 
                 var takeFromBatch = Math.Min(remaining, batch.QuantityInTablets);
                 remaining -= takeFromBatch;
 
-                // Convert tablets taken back into the unit the customer ordered
-                // so we price correctly: strips × stripPrice  OR  tablets × tabletPrice
-                var unitQuantityTaken = itemDto.SaleUnitType == SaleUnitType.Strip
-                    ? takeFromBatch / medicine.TabletsPerStrip
-                    : takeFromBatch;
+                // Express the deducted base-unit quantity back in customer units for pricing.
+                // division is safe because ConversionFactorToBase is always ≥ 1.
+                var customerUnitsTaken = takeFromBatch / saleUnit.ConversionFactorToBase;
 
-                // grossAmount is always in the customer's chosen unit
-                var grossAmount    = unitQuantityTaken * unitPrice;
+                var grossAmount    = customerUnitsTaken * unitPrice;
                 var discountAmount = Math.Round(grossAmount * itemDto.DiscountPercent / 100m, 4);
                 var lineTotal      = Math.Round(grossAmount - discountAmount, 4);
 
                 plannedItems.Add(new PlannedSaleItem(
-                    MedicineId      : itemDto.MedicineId,
-                    BatchId         : batch.BatchId,
-                    SaleUnitType    : itemDto.SaleUnitType,
-                    Quantity        : unitQuantityTaken,
-                    TabletsDeducted : takeFromBatch,
-                    UnitPrice       : unitPrice,
-                    DiscountPercent : itemDto.DiscountPercent,
-                    DiscountAmount  : discountAmount,
-                    LineTotal       : lineTotal
+                    MedicineId         : itemDto.MedicineId,
+                    BatchId            : batch.BatchId,
+                    MedicineUnitId     : itemDto.MedicineUnitId,
+                    Quantity           : (int)Math.Ceiling(customerUnitsTaken),
+                    BaseQuantityDeducted: takeFromBatch,
+                    UnitPrice          : unitPrice,
+                    DiscountPercent    : itemDto.DiscountPercent,
+                    DiscountAmount     : discountAmount,
+                    LineTotal          : lineTotal
                 ));
 
                 batchDeductions.Add((batch.BatchId, takeFromBatch));
@@ -103,9 +100,7 @@ public class SaleService : ISaleService
         // ── 3. Build the Sale aggregate ───────────────────────────────────────
         var invoiceNumber = await _repo.GenerateInvoiceNumberAsync();
 
-        var subtotal = plannedItems.Sum(p => p.LineTotal);
-
-        // Invoice-level discount applied on top of per-item discounts
+        var subtotal              = plannedItems.Sum(p => p.LineTotal);
         var invoiceDiscountAmount = Math.Round(subtotal * dto.DiscountPercent / 100m, 4);
         var totalAmount           = Math.Round(subtotal - invoiceDiscountAmount, 4);
 
@@ -123,18 +118,19 @@ public class SaleService : ISaleService
             CreatedAt       = DateTime.UtcNow,
             SaleItems       = plannedItems.Select(p => new SaleItem
             {
-                MedicineId      = p.MedicineId,
-                BatchId         = p.BatchId,
-                SaleUnitType    = p.SaleUnitType,
-                Quantity        = p.Quantity,
-                UnitPrice       = p.UnitPrice,
-                DiscountPercent = p.DiscountPercent,
-                DiscountAmount  = p.DiscountAmount,
-                LineTotal       = p.LineTotal
+                MedicineId           = p.MedicineId,
+                BatchId              = p.BatchId,
+                MedicineUnitId       = p.MedicineUnitId,
+                Quantity             = p.Quantity,
+                BaseQuantityDeducted = p.BaseQuantityDeducted,
+                UnitPrice            = p.UnitPrice,
+                DiscountPercent      = p.DiscountPercent,
+                DiscountAmount       = p.DiscountAmount,
+                LineTotal            = p.LineTotal
             }).ToList()
         };
 
-        // ── 4. Persist inside a single transaction (repo handles this) ─────────
+        // ── 4. Persist inside a single transaction ────────────────────────────
         var saved = await _repo.SaveSaleAsync(sale, batchDeductions);
 
         // ── 5. Reload with navigation properties and build response DTO ────────
@@ -146,14 +142,12 @@ public class SaleService : ISaleService
 
     // ── Query methods ──────────────────────────────────────────────────────────
 
-    /// <inheritdoc/>
     public async Task<IReadOnlyList<SaleResponseDto>> GetAllAsync()
     {
         var sales = await _repo.GetAllSalesAsync();
         return sales.Select(MapToResponse).ToList();
     }
 
-    /// <inheritdoc/>
     public async Task<SaleResponseDto?> GetByIdAsync(int id)
     {
         var sale = await _repo.GetSaleWithDetailsAsync(id);
@@ -178,34 +172,32 @@ public class SaleService : ISaleService
         TotalAmount     = s.TotalAmount,
         Items           = s.SaleItems.Select(si => new SaleItemResponseDto
         {
-            SaleItemId      = si.SaleItemId,
-            MedicineId      = si.MedicineId,
-            MedicineName    = si.Medicine?.Name ?? string.Empty,
-            BatchId         = si.BatchId,
-            BatchNumber     = si.Batch?.BatchNumber ?? string.Empty,
-            SaleUnitType    = si.SaleUnitType,
-            Quantity        = si.Quantity,
-            // TabletsDeducted: recompute from stored Quantity + unit type
-            TabletsDeducted = si.SaleUnitType == SaleUnitType.Strip && si.Medicine is not null
-                                ? si.Quantity * si.Medicine.TabletsPerStrip
-                                : si.Quantity,
-            UnitPrice       = si.UnitPrice,
-            DiscountPercent = si.DiscountPercent,
-            DiscountAmount  = si.DiscountAmount,
-            LineTotal       = si.LineTotal
+            SaleItemId           = si.SaleItemId,
+            MedicineId           = si.MedicineId,
+            MedicineName         = si.Medicine?.Name ?? string.Empty,
+            BatchId              = si.BatchId,
+            BatchNumber          = si.Batch?.BatchNumber ?? string.Empty,
+            MedicineUnitId       = si.MedicineUnitId,
+            UomName              = si.MedicineUnit?.UnitOfMeasure?.Name ?? string.Empty,
+            Quantity             = si.Quantity,
+            BaseQuantityDeducted = si.BaseQuantityDeducted,
+            UnitPrice            = si.UnitPrice,
+            DiscountPercent      = si.DiscountPercent,
+            DiscountAmount       = si.DiscountAmount,
+            LineTotal            = si.LineTotal
         }).ToList()
     };
 
     // ── Private record for in-memory FEFO planning ─────────────────────────────
 
     private sealed record PlannedSaleItem(
-        int          MedicineId,
-        int          BatchId,
-        SaleUnitType SaleUnitType,
-        int          Quantity,
-        int          TabletsDeducted,
-        decimal      UnitPrice,
-        decimal      DiscountPercent,
-        decimal      DiscountAmount,
-        decimal      LineTotal);
+        int     MedicineId,
+        int     BatchId,
+        int     MedicineUnitId,
+        int     Quantity,
+        int     BaseQuantityDeducted,
+        decimal UnitPrice,
+        decimal DiscountPercent,
+        decimal DiscountAmount,
+        decimal LineTotal);
 }

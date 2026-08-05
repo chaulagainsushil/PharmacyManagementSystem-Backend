@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PMS.Application.Application.Interface.Service;
+using PMS.Common;
 using PMS.Common.DTOs.Disposal;
 
 namespace PMS.Controllers;
@@ -38,6 +39,7 @@ public class DisposalController : ControllerBase
     /// Stock is deducted transactionally.
     /// </summary>
     [HttpPost]
+    [Authorize(Roles = $"{AppRoles.SystemAdmin},{AppRoles.PharmacyAdmin},{AppRoles.Pharmacist}")]
     [ProducesResponseType(typeof(DisposalResponseDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

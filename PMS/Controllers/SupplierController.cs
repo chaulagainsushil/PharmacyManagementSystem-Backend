@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PMS.Application.Application.Interface.Service;
+using PMS.Common;
 using PMS.Common.DTOs.Supplier;
 
 namespace PMS.Controllers;
@@ -32,6 +33,7 @@ public class SupplierController : ControllerBase
 
     /// <summary>Create a new supplier.</summary>
     [HttpPost]
+    [Authorize(Roles = $"{AppRoles.SystemAdmin},{AppRoles.PharmacyAdmin}")]
     [ProducesResponseType(typeof(SupplierResponseDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Create([FromBody] CreateSupplierDto dto)
@@ -46,6 +48,7 @@ public class SupplierController : ControllerBase
 
     /// <summary>Update an existing supplier.</summary>
     [HttpPut("{id:int}")]
+    [Authorize(Roles = $"{AppRoles.SystemAdmin},{AppRoles.PharmacyAdmin}")]
     [ProducesResponseType(typeof(SupplierResponseDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -64,6 +67,7 @@ public class SupplierController : ControllerBase
 
     /// <summary>Delete a supplier by ID.</summary>
     [HttpDelete("{id:int}")]
+    [Authorize(Roles = $"{AppRoles.SystemAdmin},{AppRoles.PharmacyAdmin}")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

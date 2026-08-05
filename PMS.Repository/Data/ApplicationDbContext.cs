@@ -21,9 +21,17 @@ public class ApplicationDbContext : IdentityDbContext<IdentityUser>
     public DbSet<SaleItem> SaleItems => Set<SaleItem>();
     public DbSet<User> AppUsers => Set<User>();
 
+    // ── UoM ───────────────────────────────────────────────────────────────────
+    public DbSet<UnitOfMeasure> UnitsOfMeasure => Set<UnitOfMeasure>();
+    public DbSet<MedicineUnit> MedicineUnits => Set<MedicineUnit>();
+
     // ── Disposal ──────────────────────────────────────────────────────────────
     public DbSet<ExpiredMedicineDisposal> ExpiredMedicineDisposals => Set<ExpiredMedicineDisposal>();
     public DbSet<ExpiredMedicineDisposalItem> ExpiredMedicineDisposalItems => Set<ExpiredMedicineDisposalItem>();
+
+    // ── Pharmacy Profile ──────────────────────────────────────────────────────
+    public DbSet<PharmacyProfile> PharmacyProfiles => Set<PharmacyProfile>();
+    public DbSet<PharmacyPhoneNumber> PharmacyPhoneNumbers => Set<PharmacyPhoneNumber>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -52,6 +60,48 @@ public class ApplicationDbContext : IdentityDbContext<IdentityUser>
             e.Property(s => s.Address).HasMaxLength(500);
         });
 
+        // ── UnitOfMeasure ─────────────────────────────────────────────────────
+        modelBuilder.Entity<UnitOfMeasure>(e =>
+        {
+            e.HasKey(u => u.UnitOfMeasureId);
+            e.Property(u => u.Name).IsRequired().HasMaxLength(100);
+            e.Property(u => u.Symbol).IsRequired().HasMaxLength(20);
+            e.HasIndex(u => u.Name).IsUnique();
+        });
+
+        // ── MedicineUnit ──────────────────────────────────────────────────────
+        modelBuilder.Entity<MedicineUnit>(e =>
+        {
+            e.HasKey(mu => mu.MedicineUnitId);
+            e.Property(mu => mu.ConversionFactorToBase).HasColumnType("numeric(18,6)");
+            e.Property(mu => mu.UnitPrice).HasColumnType("numeric(18,4)");
+
+            // Each (Medicine, UoM) pair is unique — no duplicate units per medicine
+            e.HasIndex(mu => new { mu.MedicineId, mu.UnitOfMeasureId }).IsUnique();
+
+            // Partial unique index: at most one IsBaseUnit=true per medicine
+            e.HasIndex(mu => new { mu.MedicineId, mu.IsBaseUnit })
+                .IsUnique()
+                .HasFilter("is_base_unit = true")
+                .HasDatabaseName("IX_MedicineUnits_MedicineId_IsBaseUnit_Unique");
+
+            // Partial unique index: at most one IsDefault=true per medicine
+            e.HasIndex(mu => new { mu.MedicineId, mu.IsDefault })
+                .IsUnique()
+                .HasFilter("is_default = true")
+                .HasDatabaseName("IX_MedicineUnits_MedicineId_IsDefault_Unique");
+
+            e.HasOne(mu => mu.Medicine)
+                .WithMany(m => m.Units)
+                .HasForeignKey(mu => mu.MedicineId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            e.HasOne(mu => mu.UnitOfMeasure)
+                .WithMany(u => u.MedicineUnits)
+                .HasForeignKey(mu => mu.UnitOfMeasureId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
         // ── Medicine ─────────────────────────────────────────────────────────
         modelBuilder.Entity<Medicine>(e =>
         {
@@ -61,8 +111,9 @@ public class ApplicationDbContext : IdentityDbContext<IdentityUser>
             e.Property(m => m.StripPrice).HasColumnType("numeric(18,4)");
             e.Property(m => m.TabletPrice).HasColumnType("numeric(18,4)");
 
-            // Ignore computed property — not mapped to a column
+            // Ignore computed properties — not mapped to columns
             e.Ignore(m => m.TotalStockInTablets);
+            e.Ignore(m => m.TotalTabletsPerBox);
 
             e.HasOne(m => m.Category)
                 .WithMany(c => c.Medicines)
@@ -82,7 +133,6 @@ public class ApplicationDbContext : IdentityDbContext<IdentityUser>
             e.Property(b => b.BatchNumber).IsRequired().HasMaxLength(100);
             e.Property(b => b.PurchasePricePerTablet).HasColumnType("numeric(18,4)");
 
-            // Ignore computed property
             e.Ignore(b => b.IsExpired);
 
             e.HasOne(b => b.Medicine)
@@ -151,13 +201,6 @@ public class ApplicationDbContext : IdentityDbContext<IdentityUser>
             e.Property(si => si.DiscountAmount).HasColumnType("numeric(18,4)");
             e.Property(si => si.LineTotal).HasColumnType("numeric(18,4)");
 
-            e.Property(si => si.SaleUnitType)
-                .HasConversion<string>()
-                .HasMaxLength(10);
-
-            // Ignore computed property
-            e.Ignore(si => si.TabletsDeducted);
-
             e.HasOne(si => si.Sale)
                 .WithMany(s => s.SaleItems)
                 .HasForeignKey(si => si.SaleId)
@@ -171,6 +214,11 @@ public class ApplicationDbContext : IdentityDbContext<IdentityUser>
             e.HasOne(si => si.Batch)
                 .WithMany(b => b.SaleItems)
                 .HasForeignKey(si => si.BatchId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasOne(si => si.MedicineUnit)
+                .WithMany()
+                .HasForeignKey(si => si.MedicineUnitId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
@@ -207,6 +255,31 @@ public class ApplicationDbContext : IdentityDbContext<IdentityUser>
                 .WithMany()
                 .HasForeignKey(i => i.BatchId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // ── PharmacyProfile ───────────────────────────────────────────────────
+        modelBuilder.Entity<PharmacyProfile>(e =>
+        {
+            e.HasKey(p => p.PharmacyProfileId);
+            e.Property(p => p.PharmacyName).IsRequired().HasMaxLength(300);
+            e.Property(p => p.LogoUrl).HasMaxLength(500);
+            e.Property(p => p.SignatureUrl).HasMaxLength(500);
+            e.Property(p => p.PanNumber).HasMaxLength(20);
+            e.Property(p => p.VatNumber).HasMaxLength(20);
+            e.Property(p => p.Location).HasMaxLength(500);
+        });
+
+        // ── PharmacyPhoneNumber ───────────────────────────────────────────────
+        modelBuilder.Entity<PharmacyPhoneNumber>(e =>
+        {
+            e.HasKey(p => p.PharmacyPhoneNumberId);
+            e.Property(p => p.PhoneNumber).IsRequired().HasMaxLength(20);
+            e.Property(p => p.Label).HasMaxLength(50);
+
+            e.HasOne(p => p.PharmacyProfile)
+                .WithMany(pp => pp.PhoneNumbers)
+                .HasForeignKey(p => p.PharmacyProfileId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

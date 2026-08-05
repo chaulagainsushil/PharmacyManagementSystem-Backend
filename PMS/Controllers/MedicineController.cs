@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PMS.Application.Application.Interface.Service;
+using PMS.Common;
 using PMS.Common.DTOs.Medicine;
 
 namespace PMS.Controllers;
@@ -28,6 +29,15 @@ public class MedicineController : ControllerBase
         return Ok(data);
     }
 
+    /// <summary>Search medicines by name or generic name (server-side, case-insensitive, partial match).</summary>
+    [HttpGet("search")]
+    [ProducesResponseType(typeof(IEnumerable<MedicineListItemDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> Search([FromQuery] string q = "")
+    {
+        var data = await _service.SearchAsync(q);
+        return Ok(data);
+    }
+
     /// <summary>Get a medicine by ID.</summary>
     [HttpGet("{id:int}")]
     [ProducesResponseType(typeof(MedicineResponseDto), StatusCodes.Status200OK)]
@@ -41,6 +51,7 @@ public class MedicineController : ControllerBase
 
     /// <summary>Create a new medicine.</summary>
     [HttpPost]
+    [Authorize(Roles = $"{AppRoles.SystemAdmin},{AppRoles.PharmacyAdmin}")]
     [ProducesResponseType(typeof(MedicineResponseDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Create([FromBody] CreateMedicineDto dto)
@@ -59,6 +70,7 @@ public class MedicineController : ControllerBase
     /// Returns a per-item result so the caller knows which rows succeeded and which failed.
     /// </summary>
     [HttpPost("bulk")]
+    [Authorize(Roles = $"{AppRoles.SystemAdmin},{AppRoles.PharmacyAdmin}")]
     [ProducesResponseType(typeof(BulkCreateMedicineResultDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> CreateBulk([FromBody] List<CreateMedicineDto> dtos)
@@ -72,6 +84,7 @@ public class MedicineController : ControllerBase
 
     /// <summary>Update an existing medicine.</summary>
     [HttpPut("{id:int}")]
+    [Authorize(Roles = $"{AppRoles.SystemAdmin},{AppRoles.PharmacyAdmin}")]
     [ProducesResponseType(typeof(MedicineResponseDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -91,6 +104,7 @@ public class MedicineController : ControllerBase
 
     /// <summary>Delete a medicine by ID.</summary>
     [HttpDelete("{id:int}")]
+    [Authorize(Roles = $"{AppRoles.SystemAdmin},{AppRoles.PharmacyAdmin}")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Delete(int id)

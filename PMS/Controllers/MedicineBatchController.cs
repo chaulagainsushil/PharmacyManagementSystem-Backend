@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PMS.Application.Application.Interface.Service;
+using PMS.Common;
 using PMS.Common.DTOs.MedicineBatch;
 
 namespace PMS.Controllers;
@@ -44,6 +45,7 @@ public class MedicineBatchController : ControllerBase
 
     /// <summary>Create a new medicine batch.</summary>
     [HttpPost]
+    [Authorize(Roles = $"{AppRoles.SystemAdmin},{AppRoles.PharmacyAdmin},{AppRoles.Pharmacist}")]
     [ProducesResponseType(typeof(MedicineBatchResponseDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Create([FromBody] CreateMedicineBatchDto dto)
@@ -58,6 +60,7 @@ public class MedicineBatchController : ControllerBase
 
     /// <summary>Bulk-create multiple medicine batches in one request.</summary>
     [HttpPost("bulk")]
+    [Authorize(Roles = $"{AppRoles.SystemAdmin},{AppRoles.PharmacyAdmin},{AppRoles.Pharmacist}")]
     [ProducesResponseType(typeof(BulkCreateMedicineBatchResultDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> BulkCreate([FromBody] BulkCreateMedicineBatchDto dto)
@@ -72,6 +75,7 @@ public class MedicineBatchController : ControllerBase
 
     /// <summary>Update an existing medicine batch.</summary>
     [HttpPut("{id:int}")]
+    [Authorize(Roles = $"{AppRoles.SystemAdmin},{AppRoles.PharmacyAdmin},{AppRoles.Pharmacist}")]
     [ProducesResponseType(typeof(MedicineBatchResponseDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -90,6 +94,7 @@ public class MedicineBatchController : ControllerBase
 
     /// <summary>Delete a medicine batch by ID.</summary>
     [HttpDelete("{id:int}")]
+    [Authorize(Roles = $"{AppRoles.SystemAdmin},{AppRoles.PharmacyAdmin}")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Delete(int id)

@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using PMS.Application.Application.Interface.Repository;
+using PMS.Common;
 using PMS.Common.DTOs;
 using PMS.Models.Models;
 using PMS.Repository.Data;
@@ -24,7 +25,7 @@ public class AuthRepository : IAuthRepository
         var user = new IdentityUser
         {
             UserName = dto.Email,
-            Email = dto.Email
+            Email    = dto.Email
         };
 
         var result = await _userManager.CreateAsync(user, dto.Password);
@@ -48,9 +49,7 @@ public class AuthRepository : IAuthRepository
     }
 
     public async Task<IList<string>> GetUserRolesAsync(IdentityUser user)
-    {
-        return await _userManager.GetRolesAsync(user);
-    }
+        => await _userManager.GetRolesAsync(user);
 
     public async Task<string> GetFullNameAsync(IdentityUser user)
     {
@@ -64,18 +63,25 @@ public class AuthRepository : IAuthRepository
     {
         var email = identityUser.Email ?? string.Empty;
 
-        // Try to find by email (the natural link between Identity and AppUsers)
         var appUser = await _db.AppUsers.FirstOrDefaultAsync(u => u.Email == email);
         if (appUser is not null) return appUser;
 
-        // Create a new AppUser record linked by email
-        appUser = new User
-        {
-            FullName = fullName,
-            Email = email
-        };
+        appUser = new User { FullName = fullName, Email = email };
         _db.AppUsers.Add(appUser);
         await _db.SaveChangesAsync();
         return appUser;
     }
+
+    public async Task<IdentityResult> AssignRoleAsync(IdentityUser user, string role)
+    {
+        // Remove any previously assigned roles first (one role per user model)
+        var currentRoles = await _userManager.GetRolesAsync(user);
+        if (currentRoles.Any())
+            await _userManager.RemoveFromRolesAsync(user, currentRoles);
+
+        return await _userManager.AddToRoleAsync(user, role);
+    }
+
+    public async Task<IdentityUser?> FindByEmailAsync(string email)
+        => await _userManager.FindByEmailAsync(email);
 }

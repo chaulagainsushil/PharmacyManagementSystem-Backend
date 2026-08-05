@@ -6,6 +6,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using PMS.Application.Application.Interface.Repository;
 using PMS.Application.Application.Interface.Service;
+using PMS.Common;
 using PMS.Common.DTOs;
 
 namespace PMS.Application.Application.Service;
@@ -13,13 +14,15 @@ namespace PMS.Application.Application.Service;
 public class AuthService : IAuthService
 {
     private readonly IAuthRepository _authRepository;
-    private readonly IConfiguration _configuration;
+    private readonly IConfiguration  _configuration;
 
     public AuthService(IAuthRepository authRepository, IConfiguration configuration)
     {
         _authRepository = authRepository;
-        _configuration = configuration;
+        _configuration  = configuration;
     }
+
+    // ── Signup (self-registration) ────────────────────────────────────────────
 
     public async Task<AuthResponseDto> SignupAsync(SignupDto dto)
     {
@@ -30,14 +33,108 @@ public class AuthService : IAuthService
             return new AuthResponseDto
             {
                 IsSuccess = false,
-                Message = string.Join("; ", result.Errors.Select(e => e.Description))
+                Message   = string.Join("; ", result.Errors.Select(e => e.Description))
             };
         }
 
+        // Assign role — default to Pharmacist when none is supplied
+        var role = dto.Role is not null && AppRoles.All.Contains(dto.Role)
+            ? dto.Role
+            : AppRoles.Pharmacist;
+
+        var identityUser = await _authRepository.FindByEmailAsync(dto.Email);
+        if (identityUser is not null)
+            await _authRepository.AssignRoleAsync(identityUser, role);
+
         // Auto-login after successful signup
-        var loginDto = new LoginDto { Email = dto.Email, Password = dto.Password };
-        return await LoginAsync(loginDto);
+        return await LoginAsync(new LoginDto { Email = dto.Email, Password = dto.Password });
     }
+
+    // ── CreateUser (admin-initiated) ──────────────────────────────────────────
+
+    public async Task<AuthResponseDto> CreateUserAsync(SignupDto dto)
+    {
+        // Validate that the requested role is known
+        var role = dto.Role is not null && AppRoles.All.Contains(dto.Role)
+            ? dto.Role
+            : AppRoles.Pharmacist;
+
+        var registerResult = await _authRepository.RegisterAsync(dto);
+
+        if (!registerResult.Succeeded)
+        {
+            return new AuthResponseDto
+            {
+                IsSuccess = false,
+                Message   = string.Join("; ", registerResult.Errors.Select(e => e.Description))
+            };
+        }
+
+        var identityUser = await _authRepository.FindByEmailAsync(dto.Email);
+        if (identityUser is not null)
+        {
+            var roleResult = await _authRepository.AssignRoleAsync(identityUser, role);
+            if (!roleResult.Succeeded)
+            {
+                return new AuthResponseDto
+                {
+                    IsSuccess = false,
+                    Message   = string.Join("; ", roleResult.Errors.Select(e => e.Description))
+                };
+            }
+        }
+
+        return new AuthResponseDto
+        {
+            IsSuccess = true,
+            Message   = $"User created and assigned role '{role}'.",
+            Email     = dto.Email,
+            FullName  = dto.FullName,
+            Roles     = [role]
+        };
+    }
+
+    // ── AssignRole (re-assign existing user) ──────────────────────────────────
+
+    public async Task<AuthResponseDto> AssignRoleAsync(AssignRoleDto dto)
+    {
+        if (!AppRoles.All.Contains(dto.Role))
+        {
+            return new AuthResponseDto
+            {
+                IsSuccess = false,
+                Message   = $"Unknown role '{dto.Role}'. Valid roles: {string.Join(", ", AppRoles.All)}."
+            };
+        }
+
+        var identityUser = await _authRepository.FindByEmailAsync(dto.Email);
+        if (identityUser is null)
+        {
+            return new AuthResponseDto
+            {
+                IsSuccess = false,
+                Message   = $"No user found with email '{dto.Email}'."
+            };
+        }
+
+        var result = await _authRepository.AssignRoleAsync(identityUser, dto.Role);
+
+        return result.Succeeded
+            ? new AuthResponseDto
+            {
+                IsSuccess = true,
+                Message   = $"Role '{dto.Role}' assigned to '{dto.Email}'.",
+                Email     = dto.Email,
+                Roles     = [dto.Role]
+            }
+            : new AuthResponseDto
+            {
+                IsSuccess = false,
+                Message   = string.Join("; ", result.Errors.Select(e => e.Description))
+            };
+    }
+
+    // ── Login ─────────────────────────────────────────────────────────────────
 
     public async Task<AuthResponseDto> LoginAsync(LoginDto dto)
     {
@@ -48,7 +145,7 @@ public class AuthService : IAuthService
             return new AuthResponseDto
             {
                 IsSuccess = false,
-                Message = "Invalid email or password."
+                Message   = "Invalid email or password."
             };
         }
 

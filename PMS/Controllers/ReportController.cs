@@ -49,4 +49,31 @@ public class ReportController : ControllerBase
     [ProducesResponseType(typeof(List<TopSupplierDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> TopSuppliers([FromQuery] int top = 10)
         => Ok(await _service.GetTopSuppliersAsync(top));
+
+    /// <summary>Monthly sales breakdown for the last N months (default 12).</summary>
+    [HttpGet("monthly-sales")]
+    [ProducesResponseType(typeof(List<MonthlySalesSummaryDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> MonthlySales([FromQuery] int months = 12)
+        => Ok(await _service.GetMonthlySalesAsync(months));
+
+    /// <summary>All active medicines at or below their reorder level, sorted by lowest stock first.</summary>
+    [HttpGet("low-stock")]
+    [ProducesResponseType(typeof(List<LowStockItemDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> LowStock()
+        => Ok(await _service.GetLowStockAsync());
+
+    /// <summary>
+    /// Stock consumption report — medicines sold in a date range,
+    /// optionally filtered by supplier and/or manufacturer,
+    /// sorted by quantity (default) or revenue.
+    /// </summary>
+    [HttpGet("stock-consumption")]
+    [ProducesResponseType(typeof(StockConsumptionReportDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> StockConsumption(
+        [FromQuery] DateTime? from,
+        [FromQuery] DateTime? to,
+        [FromQuery] int? supplierId,
+        [FromQuery] int? manufacturerId,
+        [FromQuery] string sortBy = "quantity")
+        => Ok(await _service.GetStockConsumptionAsync(from, to, supplierId, manufacturerId, sortBy));
 }

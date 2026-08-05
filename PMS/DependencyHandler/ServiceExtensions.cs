@@ -6,6 +6,7 @@ using PMS.Application.Application.Interface.Repository;
 using PMS.Application.Application.Interface.Service;
 using PMS.Application.Application.Repository;
 using PMS.Application.Application.Service;
+using PMS.Common;
 using PMS.Repository.Data;
 
 namespace PMS.DependencyHandler;
@@ -23,18 +24,18 @@ public static class ServiceExtensions
         // ── ASP.NET Identity ─────────────────────────────────────────────────
         services.AddIdentity<IdentityUser, IdentityRole>(options =>
             {
-                options.Password.RequiredLength = 6;
+                options.Password.RequiredLength      = 6;
                 options.Password.RequireNonAlphanumeric = false;
-                options.Password.RequireUppercase = false;
-                options.Password.RequireDigit = false;
-                options.User.RequireUniqueEmail = true;
+                options.Password.RequireUppercase    = false;
+                options.Password.RequireDigit        = false;
+                options.User.RequireUniqueEmail      = true;
             })
             .AddEntityFrameworkStores<ApplicationDbContext>()
             .AddDefaultTokenProviders();
 
         // ── JWT Authentication ────────────────────────────────────────────────
         var jwtSettings = configuration.GetSection("JwtSettings");
-        var secretKey = jwtSettings["SecretKey"]
+        var secretKey   = jwtSettings["SecretKey"]
             ?? throw new InvalidOperationException("JwtSettings:SecretKey is not configured.");
 
         services.AddAuthentication(options =>
@@ -64,5 +65,22 @@ public static class ServiceExtensions
         services.AddScoped<IAuthService, AuthService>();
 
         return services;
+    }
+
+    /// <summary>
+    /// Seeds all application roles into the database if they do not already exist.
+    /// Call this after <c>app.Build()</c>:
+    /// <code>await app.SeedRolesAsync();</code>
+    /// </summary>
+    public static async Task SeedRolesAsync(this IApplicationBuilder app)
+    {
+        using var scope       = app.ApplicationServices.CreateScope();
+        var roleManager       = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+
+        foreach (var roleName in AppRoles.All)
+        {
+            if (!await roleManager.RoleExistsAsync(roleName))
+                await roleManager.CreateAsync(new IdentityRole(roleName));
+        }
     }
 }

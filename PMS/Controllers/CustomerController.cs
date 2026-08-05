@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PMS.Application.Application.Interface.Service;
+using PMS.Common;
 using PMS.Common.DTOs.Customer;
 
 namespace PMS.Controllers;
@@ -32,6 +33,7 @@ public class CustomerController : ControllerBase
 
     /// <summary>Create a new customer.</summary>
     [HttpPost]
+    [Authorize(Roles = $"{AppRoles.SystemAdmin},{AppRoles.PharmacyAdmin},{AppRoles.Pharmacist},{AppRoles.Receptionist}")]
     [ProducesResponseType(typeof(CustomerResponseDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Create([FromBody] CreateCustomerDto dto)
@@ -46,6 +48,7 @@ public class CustomerController : ControllerBase
 
     /// <summary>Update an existing customer.</summary>
     [HttpPut("{id:int}")]
+    [Authorize(Roles = $"{AppRoles.SystemAdmin},{AppRoles.PharmacyAdmin},{AppRoles.Pharmacist},{AppRoles.Receptionist}")]
     [ProducesResponseType(typeof(CustomerResponseDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -64,6 +67,7 @@ public class CustomerController : ControllerBase
 
     /// <summary>Delete a customer by ID.</summary>
     [HttpDelete("{id:int}")]
+    [Authorize(Roles = $"{AppRoles.SystemAdmin},{AppRoles.PharmacyAdmin}")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

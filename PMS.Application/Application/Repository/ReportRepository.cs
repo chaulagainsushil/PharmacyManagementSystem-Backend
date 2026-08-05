@@ -11,6 +11,8 @@ public class ReportRepository : IReportRepository
 
     public ReportRepository(ApplicationDbContext db) => _db = db;
 
+    // ── Sales Summary ─────────────────────────────────────────────────────────
+
     public async Task<SalesSummaryDto> GetSalesSummaryAsync(DateTime from, DateTime to)
     {
         var sales = await _db.Sales
@@ -23,11 +25,156 @@ public class ReportRepository : IReportRepository
 
         return new SalesSummaryDto
         {
-            TotalSales      = sales.Count,
-            TotalRevenue    = sales.Sum(s => s.TotalAmount),
-            TotalItemsSold  = itemCount,
+            TotalSales     = sales.Count,
+            TotalRevenue   = sales.Sum(s => s.TotalAmount),
+            TotalItemsSold = itemCount,
         };
     }
+
+    // ── Monthly Breakdown ─────────────────────────────────────────────────────
+
+    public async Task<List<MonthlySalesSummaryDto>> GetMonthlySalesAsync(int months = 12)
+    {
+        var cutoff = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1, 0, 0, 0, DateTimeKind.Utc)
+            .AddMonths(-(months - 1));
+
+        var grouped = await _db.Sales
+            .Where(s => s.SaleDate >= cutoff)
+            .GroupBy(s => new { s.SaleDate.Year, s.SaleDate.Month })
+            .Select(g => new
+            {
+                g.Key.Year,
+                g.Key.Month,
+                TotalSales   = g.Count(),
+                TotalRevenue = g.Sum(s => s.TotalAmount),
+            })
+            .OrderBy(g => g.Year).ThenBy(g => g.Month)
+            .ToListAsync();
+
+        var itemsByMonth = await _db.SaleItems
+            .Where(si => si.Sale.SaleDate >= cutoff)
+            .GroupBy(si => new { si.Sale.SaleDate.Year, si.Sale.SaleDate.Month })
+            .Select(g => new { g.Key.Year, g.Key.Month, TotalItems = g.Sum(x => x.Quantity) })
+            .ToListAsync();
+
+        return grouped.Select(g =>
+        {
+            var items = itemsByMonth.FirstOrDefault(i => i.Year == g.Year && i.Month == g.Month);
+            return new MonthlySalesSummaryDto
+            {
+                Year           = g.Year,
+                Month          = g.Month,
+                MonthLabel     = new DateTime(g.Year, g.Month, 1).ToString("MMM yyyy"),
+                TotalSales     = g.TotalSales,
+                TotalRevenue   = g.TotalRevenue,
+                TotalItemsSold = items?.TotalItems ?? 0,
+            };
+        }).ToList();
+    }
+
+    // ── Low Stock ─────────────────────────────────────────────────────────────
+
+    public async Task<List<LowStockItemDto>> GetLowStockAsync()
+    {
+        return await _db.Medicines
+            .Include(m => m.Category)
+            .Include(m => m.Manufacturer)
+            .Include(m => m.Batches)
+            .Where(m => m.IsActive && m.TotalStockInTablets <= m.ReorderLevel)
+            .OrderBy(m => m.TotalStockInTablets)
+            .Select(m => new LowStockItemDto
+            {
+                MedicineId          = m.MedicineId,
+                MedicineName        = m.Name,
+                GenericName         = m.GenericName,
+                CategoryName        = m.Category != null ? m.Category.CategoryName : null,
+                ManufacturerName    = m.Manufacturer != null ? m.Manufacturer.Name : null,
+                TotalStockInTablets = m.TotalStockInTablets,
+                ReorderLevel        = m.ReorderLevel,
+                ShortfallInTablets  = m.ReorderLevel - m.TotalStockInTablets,
+            })
+            .ToListAsync();
+    }
+
+    // ── Stock Consumption ─────────────────────────────────────────────────────
+
+    public async Task<StockConsumptionReportDto> GetStockConsumptionAsync(
+        DateTime? from, DateTime? to, int? supplierId, int? manufacturerId, string sortBy)
+    {
+        var toDate = (to ?? DateTime.UtcNow).Date.AddDays(1); // inclusive end of to-date
+        var fromDate = from?.Date ?? DateTime.MinValue;
+
+        var query = _db.SaleItems
+            .Include(si => si.Medicine)
+                .ThenInclude(m => m.Category)
+            .Include(si => si.Medicine)
+                .ThenInclude(m => m.Manufacturer)
+            .Include(si => si.Sale)
+            .Where(si => si.Sale.SaleDate >= fromDate && si.Sale.SaleDate < toDate)
+            .AsQueryable();
+
+        // Filter by manufacturer
+        if (manufacturerId.HasValue)
+            query = query.Where(si => si.Medicine.ManufacturerId == manufacturerId.Value);
+
+        // Filter by supplier — a medicine was supplied by a supplier if any of its batches came from that supplier
+        if (supplierId.HasValue)
+            query = query.Where(si =>
+                _db.MedicineBatches.Any(b =>
+                    b.MedicineId == si.MedicineId && b.SupplierId == supplierId.Value));
+
+        var grouped = await query
+            .GroupBy(si => new
+            {
+                si.MedicineId,
+                si.Medicine.Name,
+                GenericName      = si.Medicine.GenericName,
+                CategoryName     = si.Medicine.Category != null ? si.Medicine.Category.CategoryName : null,
+                ManufacturerName = si.Medicine.Manufacturer != null ? si.Medicine.Manufacturer.Name : null,
+            })
+            .Select(g => new StockConsumptionItemDto
+            {
+                MedicineId        = g.Key.MedicineId,
+                MedicineName      = g.Key.Name,
+                GenericName       = g.Key.GenericName,
+                CategoryName      = g.Key.CategoryName,
+                ManufacturerName  = g.Key.ManufacturerName,
+                TotalQuantitySold = g.Sum(x => x.Quantity),
+                TotalSalesCount   = g.Select(x => x.SaleId).Distinct().Count(),
+                TotalRevenue      = g.Sum(x => x.LineTotal),
+            })
+            .ToListAsync();
+
+        // Attach supplier name per medicine (from most recent batch of that supplier)
+        if (supplierId.HasValue)
+        {
+            var supplierName = await _db.Suppliers
+                .Where(s => s.SupplierId == supplierId.Value)
+                .Select(s => s.Name)
+                .FirstOrDefaultAsync();
+            grouped.ForEach(i => i.SupplierName = supplierName);
+        }
+
+        // Sort
+        grouped = sortBy?.ToLower() switch
+        {
+            "revenue" => grouped.OrderByDescending(i => i.TotalRevenue).ToList(),
+            _         => grouped.OrderByDescending(i => i.TotalQuantitySold).ToList(), // default: quantity
+        };
+
+        return new StockConsumptionReportDto
+        {
+            FromDate          = from,
+            ToDate            = to,
+            SupplierId        = supplierId,
+            ManufacturerId    = manufacturerId,
+            Items             = grouped,
+            TotalQuantitySold = grouped.Sum(i => i.TotalQuantitySold),
+            TotalRevenue      = grouped.Sum(i => i.TotalRevenue),
+        };
+    }
+
+    // ── Top N ─────────────────────────────────────────────────────────────────
 
     public async Task<List<TopMedicineDto>> GetTopMedicinesAsync(DateTime from, DateTime to, int top = 10) =>
         await _db.SaleItems
@@ -35,10 +182,10 @@ public class ReportRepository : IReportRepository
             .GroupBy(si => new { si.MedicineId, si.Medicine.Name })
             .Select(g => new TopMedicineDto
             {
-                MedicineId          = g.Key.MedicineId,
-                MedicineName        = g.Key.Name,
-                TotalQuantitySold   = g.Sum(x => x.Quantity),
-                TotalRevenue        = g.Sum(x => x.LineTotal),
+                MedicineId        = g.Key.MedicineId,
+                MedicineName      = g.Key.Name,
+                TotalQuantitySold = g.Sum(x => x.Quantity),
+                TotalRevenue      = g.Sum(x => x.LineTotal),
             })
             .OrderByDescending(x => x.TotalQuantitySold)
             .Take(top)
@@ -51,10 +198,10 @@ public class ReportRepository : IReportRepository
             .GroupBy(si => new { si.Medicine.ManufacturerId, si.Medicine.Manufacturer!.Name })
             .Select(g => new TopManufacturerDto
             {
-                ManufacturerId      = g.Key.ManufacturerId!.Value,
-                ManufacturerName    = g.Key.Name,
-                TotalMedicinesSold  = g.Select(x => x.MedicineId).Distinct().Count(),
-                TotalRevenue        = g.Sum(x => x.LineTotal),
+                ManufacturerId     = g.Key.ManufacturerId!.Value,
+                ManufacturerName   = g.Key.Name,
+                TotalMedicinesSold = g.Select(x => x.MedicineId).Distinct().Count(),
+                TotalRevenue       = g.Sum(x => x.LineTotal),
             })
             .OrderByDescending(x => x.TotalRevenue)
             .Take(top)
@@ -66,10 +213,10 @@ public class ReportRepository : IReportRepository
             .GroupBy(b => new { b.SupplierId, b.Supplier!.Name })
             .Select(g => new TopSupplierDto
             {
-                SupplierId              = g.Key.SupplierId!.Value,
-                SupplierName            = g.Key.Name,
-                TotalBatchesSupplied    = g.Count(),
-                TotalTabletsSupplied    = g.Sum(b => b.QuantityInTablets),
+                SupplierId           = g.Key.SupplierId!.Value,
+                SupplierName         = g.Key.Name,
+                TotalBatchesSupplied = g.Count(),
+                TotalTabletsSupplied = g.Sum(b => b.QuantityInTablets),
             })
             .OrderByDescending(x => x.TotalTabletsSupplied)
             .Take(top)

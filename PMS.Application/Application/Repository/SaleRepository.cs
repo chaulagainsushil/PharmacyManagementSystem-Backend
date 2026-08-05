@@ -18,19 +18,18 @@ public class SaleRepository : ISaleRepository
     // ── Lookup helpers ─────────────────────────────────────────────────────────
 
     /// <inheritdoc/>
-    public async Task<Medicine?> GetMedicineWithFefoStockAsync(int medicineId)
-    {
-        // Load medicine with only non-expired, in-stock batches, ordered FEFO
-        // (earliest ExpiryDate first so the service drains them in order).
-        var medicine = await _db.Medicines
+    public async Task<Medicine?> GetMedicineWithUnitsAndFefoStockAsync(int medicineId) =>
+        await _db.Medicines
             .Where(m => m.MedicineId == medicineId && m.IsActive)
+            // Load active MedicineUnits with their UoM master so the service can
+            // call Medicine.ConvertToBaseQuantity and Medicine.GetUnitPrice.
+            .Include(m => m.Units.Where(u => u.IsActive))
+                .ThenInclude(u => u.UnitOfMeasure)
+            // FEFO batches: non-expired, in-stock, sorted earliest expiry first
             .Include(m => m.Batches
                 .Where(b => b.ExpiryDate.Date > DateTime.UtcNow.Date && b.QuantityInTablets > 0)
                 .OrderBy(b => b.ExpiryDate))
             .FirstOrDefaultAsync();
-
-        return medicine;
-    }
 
     /// <inheritdoc/>
     public async Task<bool> CustomerExistsAsync(int customerId) =>
@@ -45,28 +44,25 @@ public class SaleRepository : ISaleRepository
     /// <inheritdoc/>
     public async Task<Sale> SaveSaleAsync(
         Sale sale,
-        IReadOnlyList<(int BatchId, int TabletsToDeduct)> batchDeductions)
+        IReadOnlyList<(int BatchId, int BaseUnitsToDeduct)> batchDeductions)
     {
-        // Begin an explicit transaction so that any mid-write failure rolls back
-        // both the batch quantity updates and the new Sale/SaleItem rows.
         await using var transaction = await _db.Database.BeginTransactionAsync();
         try
         {
-            // 1. Deduct stock from each batch
-            foreach (var (batchId, tabletsToDeduct) in batchDeductions)
+            // 1. Deduct base-unit stock from each batch
+            foreach (var (batchId, baseUnitsToDeduct) in batchDeductions)
             {
-                // Use tracked entity to benefit from EF change tracking
                 var batch = await _db.MedicineBatches.FindAsync(batchId)
                     ?? throw new InvalidOperationException(
                         $"Batch {batchId} disappeared during transaction.");
 
-                batch.QuantityInTablets -= tabletsToDeduct;
+                batch.QuantityInTablets -= baseUnitsToDeduct;
             }
 
-            // 2. Insert the Sale (its SaleItems are already populated via navigation property)
+            // 2. Insert the Sale (SaleItems already in navigation property)
             _db.Sales.Add(sale);
 
-            // 3. Flush everything in one round-trip, then commit
+            // 3. Flush and commit
             await _db.SaveChangesAsync();
             await transaction.CommitAsync();
 
@@ -90,6 +86,9 @@ public class SaleRepository : ISaleRepository
                 .ThenInclude(si => si.Medicine)
             .Include(s => s.SaleItems)
                 .ThenInclude(si => si.Batch)
+            .Include(s => s.SaleItems)
+                .ThenInclude(si => si.MedicineUnit)
+                    .ThenInclude(mu => mu.UnitOfMeasure)
             .AsNoTracking()
             .FirstOrDefaultAsync(s => s.SaleId == saleId);
 
@@ -102,6 +101,9 @@ public class SaleRepository : ISaleRepository
                 .ThenInclude(si => si.Medicine)
             .Include(s => s.SaleItems)
                 .ThenInclude(si => si.Batch)
+            .Include(s => s.SaleItems)
+                .ThenInclude(si => si.MedicineUnit)
+                    .ThenInclude(mu => mu.UnitOfMeasure)
             .AsNoTracking()
             .OrderByDescending(s => s.SaleDate)
             .ToListAsync();
@@ -111,15 +113,12 @@ public class SaleRepository : ISaleRepository
     /// <inheritdoc/>
     public async Task<string> GenerateInvoiceNumberAsync()
     {
-        // Format: INV-YYYYMMDD-NNNN  (sequence resets per day)
-        var today = DateTime.UtcNow.Date;
+        var today  = DateTime.UtcNow.Date;
         var prefix = $"INV-{today:yyyyMMdd}-";
 
-        // Count how many invoices exist for today to get the next sequence
         var countToday = await _db.Sales
             .CountAsync(s => s.InvoiceNumber.StartsWith(prefix));
 
-        var sequence = (countToday + 1).ToString("D4");
-        return $"{prefix}{sequence}";
+        return $"{prefix}{(countToday + 1):D4}";
     }
 }

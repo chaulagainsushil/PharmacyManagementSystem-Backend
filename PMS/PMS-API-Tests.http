@@ -1,0 +1,951 @@
+### PMS API — Full Test Suite
+### Base URL: http://localhost:5259
+### Run the app first: dotnet run --project PMS
+###
+### ORDER MATTERS — run requests top-to-bottom.
+### Each section depends on IDs from prior responses.
+### Copy token from the login response into @token below.
+
+@base = http://localhost:5259
+@contentType = application/json
+
+# ─────────────────────────────────────────────────────────────
+# 0.  TOKENS  (fill these in after running the login requests)
+# ─────────────────────────────────────────────────────────────
+@adminToken     = PASTE_ADMIN_TOKEN_HERE
+@pharmacistToken = PASTE_PHARMACIST_TOKEN_HERE
+
+
+###
+# ═══════════════════════════════════════════════════════
+# 1. AUTH
+# ═══════════════════════════════════════════════════════
+
+### 1a. Sign up — self-registration (always gets Pharmacist role)
+POST {{base}}/api/auth/signup
+Content-Type: {{contentType}}
+
+{
+  "fullName": "Test Pharmacist",
+  "email": "pharmacist@pms.test",
+  "password": "Test123!",
+  "confirmPassword": "Test123!"
+}
+
+###
+### 1b. Login as pharmacist — copy token into @pharmacistToken
+POST {{base}}/api/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "pharmacist@pms.test",
+  "password": "Test123!"
+}
+
+###
+### 1c. Sign up a SystemAdmin account
+POST {{base}}/api/auth/signup
+Content-Type: {{contentType}}
+
+{
+  "fullName": "System Admin",
+  "email": "admin@pms.test",
+  "password": "Admin123!",
+  "confirmPassword": "Admin123!"
+}
+
+###
+### 1d. Login as admin (still Pharmacist role at this point)
+POST {{base}}/api/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "admin@pms.test",
+  "password": "Admin123!"
+}
+
+###
+### 1e. Promote admin account to SystemAdmin via DB (run once in psql):
+###     UPDATE "AspNetUsers" u
+###     JOIN   "AspNetUserRoles" ur ON ur."UserId" = u."Id"
+###     SET    ur."RoleId" = (SELECT "Id" FROM "AspNetRoles" WHERE "Name"='SystemAdmin')
+###     WHERE  u."Email" = 'admin@pms.test';
+###
+### OR via the API after you already have an admin token — assign-role (self-referential):
+###
+### 1f. Admin creates a PharmacyAdmin user (requires SystemAdmin token)
+POST {{base}}/api/auth/create-user
+Content-Type: {{contentType}}
+Authorization: Bearer {{adminToken}}
+
+{
+  "fullName": "Pharmacy Admin",
+  "email": "pharm.admin@pms.test",
+  "password": "Admin123!",
+  "confirmPassword": "Admin123!",
+  "role": "PharmacyAdmin"
+}
+
+###
+### 1g. Assign SystemAdmin role to an existing user
+POST {{base}}/api/auth/assign-role
+Content-Type: {{contentType}}
+Authorization: Bearer {{adminToken}}
+
+{
+  "email": "admin@pms.test",
+  "role": "SystemAdmin"
+}
+
+###
+### 1h. Login again to get a fresh token with SystemAdmin role — paste into @adminToken
+POST {{base}}/api/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "admin@pms.test",
+  "password": "Admin123!"
+}
+
+
+###
+# ═══════════════════════════════════════════════════════
+# 2. CATEGORY
+# ═══════════════════════════════════════════════════════
+
+### 2a. Get all categories (any authenticated user)
+GET {{base}}/api/category
+Authorization: Bearer {{pharmacistToken}}
+
+###
+### 2b. Create category — Antibiotics
+POST {{base}}/api/category
+Content-Type: {{contentType}}
+Authorization: Bearer {{adminToken}}
+
+{
+  "categoryName": "Antibiotics",
+  "description": "Medicines that kill or inhibit bacteria"
+}
+
+###
+### 2c. Create category — Analgesics
+POST {{base}}/api/category
+Content-Type: {{contentType}}
+Authorization: Bearer {{adminToken}}
+
+{
+  "categoryName": "Analgesics",
+  "description": "Pain-relief medicines"
+}
+
+###
+### 2d. Get category by ID (use ID from 2b response)
+GET {{base}}/api/category/1
+Authorization: Bearer {{pharmacistToken}}
+
+###
+### 2e. Update category
+PUT {{base}}/api/category/1
+Content-Type: {{contentType}}
+Authorization: Bearer {{adminToken}}
+
+{
+  "categoryName": "Antibiotics (Updated)",
+  "description": "Broad-spectrum antibacterial medicines"
+}
+
+###
+### 2f. Try to create with Pharmacist role — expect 403
+POST {{base}}/api/category
+Content-Type: {{contentType}}
+Authorization: Bearer {{pharmacistToken}}
+
+{
+  "categoryName": "Should Fail",
+  "description": "Pharmacists cannot create categories"
+}
+
+
+###
+# ═══════════════════════════════════════════════════════
+# 3. MANUFACTURER
+# ═══════════════════════════════════════════════════════
+
+### 3a. Create manufacturer
+POST {{base}}/api/manufacturer
+Content-Type: {{contentType}}
+Authorization: Bearer {{adminToken}}
+
+{
+  "name": "Cipla Ltd",
+  "country": "India",
+  "contactEmail": "cipla@example.com"
+}
+
+###
+### 3b. Create second manufacturer
+POST {{base}}/api/manufacturer
+Content-Type: {{contentType}}
+Authorization: Bearer {{adminToken}}
+
+{
+  "name": "Sun Pharma",
+  "country": "India"
+}
+
+###
+### 3c. Get all manufacturers
+GET {{base}}/api/manufacturer
+Authorization: Bearer {{pharmacistToken}}
+
+###
+### 3d. Get manufacturer by ID
+GET {{base}}/api/manufacturer/1
+Authorization: Bearer {{pharmacistToken}}
+
+
+###
+# ═══════════════════════════════════════════════════════
+# 4. SUPPLIER
+# ═══════════════════════════════════════════════════════
+
+### 4a. Create supplier
+POST {{base}}/api/supplier
+Content-Type: {{contentType}}
+Authorization: Bearer {{adminToken}}
+
+{
+  "name": "MedLine Distributors",
+  "phone": "9800000001",
+  "address": "Kathmandu, Nepal"
+}
+
+###
+### 4b. Create second supplier
+POST {{base}}/api/supplier
+Content-Type: {{contentType}}
+Authorization: Bearer {{adminToken}}
+
+{
+  "name": "PharmaCo Nepal",
+  "phone": "9800000002",
+  "address": "Pokhara, Nepal"
+}
+
+###
+### 4c. Get all suppliers
+GET {{base}}/api/supplier
+Authorization: Bearer {{pharmacistToken}}
+
+###
+### 4d. Update supplier
+PUT {{base}}/api/supplier/1
+Content-Type: {{contentType}}
+Authorization: Bearer {{adminToken}}
+
+{
+  "name": "MedLine Distributors (Updated)",
+  "phone": "9800000001",
+  "address": "Kathmandu, Baneshwor"
+}
+
+
+###
+# ═══════════════════════════════════════════════════════
+# 5. UNIT OF MEASURE (UOM)
+# ═══════════════════════════════════════════════════════
+
+### 5a. Get all active UoMs (seeded: Tablet, Strip, Bottle, Sachet, Packet, Piece, Box)
+GET {{base}}/api/uom
+Authorization: Bearer {{pharmacistToken}}
+
+###
+### 5b. Get UoM by ID (Tablet = 1 from seed)
+GET {{base}}/api/uom/1
+Authorization: Bearer {{pharmacistToken}}
+
+###
+### 5c. Create a custom UoM
+POST {{base}}/api/uom
+Content-Type: {{contentType}}
+Authorization: Bearer {{adminToken}}
+
+{
+  "name": "Vial",
+  "symbol": "vial"
+}
+
+###
+### 5d. Update a UoM
+PUT {{base}}/api/uom/8
+Content-Type: {{contentType}}
+Authorization: Bearer {{adminToken}}
+
+{
+  "name": "Vial",
+  "symbol": "vl",
+  "isActive": true
+}
+
+###
+### 5e. Get all including inactive
+GET {{base}}/api/uom?includeInactive=true
+Authorization: Bearer {{adminToken}}
+
+
+###
+# ═══════════════════════════════════════════════════════
+# 6. MEDICINE
+# ═══════════════════════════════════════════════════════
+
+### 6a. Create medicine — Amoxicillin (strip-based, 10 tablets per strip)
+POST {{base}}/api/medicine
+Content-Type: {{contentType}}
+Authorization: Bearer {{adminToken}}
+
+{
+  "name": "Amoxicillin 500mg",
+  "genericName": "Amoxicillin",
+  "categoryId": 1,
+  "manufacturerId": 1,
+  "tabletsPerStrip": 10,
+  "strapsPerBox": 10,
+  "stripPrice": 45.00,
+  "tabletPrice": 4.50,
+  "reorderLevel": 50,
+  "requiresPrescription": true,
+  "isActive": true
+}
+
+###
+### 6b. Create medicine — Paracetamol (15 tablets per strip)
+POST {{base}}/api/medicine
+Content-Type: {{contentType}}
+Authorization: Bearer {{adminToken}}
+
+{
+  "name": "Paracetamol 500mg",
+  "genericName": "Paracetamol",
+  "categoryId": 2,
+  "manufacturerId": 2,
+  "tabletsPerStrip": 15,
+  "strapsPerBox": 10,
+  "stripPrice": 20.00,
+  "tabletPrice": 1.35,
+  "reorderLevel": 100,
+  "requiresPrescription": false,
+  "isActive": true
+}
+
+###
+### 6c. Create medicine — Ibuprofen (single-tablet dispensing only)
+POST {{base}}/api/medicine
+Content-Type: {{contentType}}
+Authorization: Bearer {{adminToken}}
+
+{
+  "name": "Ibuprofen 400mg",
+  "genericName": "Ibuprofen",
+  "categoryId": 2,
+  "manufacturerId": 1,
+  "tabletsPerStrip": 10,
+  "strapsPerBox": 5,
+  "stripPrice": 35.00,
+  "tabletPrice": 3.50,
+  "reorderLevel": 30,
+  "requiresPrescription": false,
+  "isActive": true
+}
+
+###
+### 6d. Get all medicines
+GET {{base}}/api/medicine
+Authorization: Bearer {{pharmacistToken}}
+
+###
+### 6e. Search medicines
+GET {{base}}/api/medicine/search?q=amox
+Authorization: Bearer {{pharmacistToken}}
+
+###
+### 6f. Get medicine by ID
+GET {{base}}/api/medicine/1
+Authorization: Bearer {{pharmacistToken}}
+
+###
+### 6g. Update medicine
+PUT {{base}}/api/medicine/1
+Content-Type: {{contentType}}
+Authorization: Bearer {{adminToken}}
+
+{
+  "name": "Amoxicillin 500mg",
+  "genericName": "Amoxicillin Trihydrate",
+  "categoryId": 1,
+  "manufacturerId": 1,
+  "tabletsPerStrip": 10,
+  "strapsPerBox": 10,
+  "stripPrice": 48.00,
+  "tabletPrice": 4.80,
+  "reorderLevel": 50,
+  "requiresPrescription": true,
+  "isActive": true
+}
+
+###
+### 6h. Bulk create medicines
+POST {{base}}/api/medicine/bulk
+Content-Type: {{contentType}}
+Authorization: Bearer {{adminToken}}
+
+[
+  {
+    "name": "Metformin 500mg",
+    "genericName": "Metformin HCl",
+    "tabletsPerStrip": 10,
+    "strapsPerBox": 10,
+    "stripPrice": 30.00,
+    "tabletPrice": 3.00,
+    "reorderLevel": 60,
+    "requiresPrescription": true,
+    "isActive": true
+  },
+  {
+    "name": "Atorvastatin 10mg",
+    "genericName": "Atorvastatin",
+    "tabletsPerStrip": 10,
+    "strapsPerBox": 10,
+    "stripPrice": 120.00,
+    "tabletPrice": 12.00,
+    "reorderLevel": 20,
+    "requiresPrescription": true,
+    "isActive": true
+  }
+]
+
+
+###
+# ═══════════════════════════════════════════════════════
+# 7. MEDICINE UNITS  (UoM attached to specific medicines)
+# ═══════════════════════════════════════════════════════
+# After migration, every medicine already has Tablet (base+default)
+# and Strip (if tabletsPerStrip>1) units created automatically.
+
+### 7a. Get all units for medicine 1 (management view)
+GET {{base}}/api/medicineunit/by-medicine/1
+Authorization: Bearer {{pharmacistToken}}
+
+###
+### 7b. Get units for POS dropdown — default first
+GET {{base}}/api/medicineunit/pos/1
+Authorization: Bearer {{pharmacistToken}}
+
+###
+### 7c. Attach a Box unit to medicine 1 (10 strips per box = 100 tablets)
+POST {{base}}/api/medicineunit
+Content-Type: {{contentType}}
+Authorization: Bearer {{adminToken}}
+
+{
+  "medicineId": 1,
+  "unitOfMeasureId": 7,
+  "conversionFactorToBase": 100,
+  "unitPrice": 450.00,
+  "isBaseUnit": false,
+  "isDefault": false
+}
+
+###
+### 7d. Set Strip as the default POS unit for medicine 1
+POST {{base}}/api/medicineunit/set-default
+Content-Type: {{contentType}}
+Authorization: Bearer {{adminToken}}
+
+{
+  "medicineId": 1,
+  "medicineUnitId": 2
+}
+
+###
+### 7e. Update the price for a medicine unit (unit ID 2 = Strip of medicine 1)
+PATCH {{base}}/api/medicineunit/2/price
+Content-Type: {{contentType}}
+Authorization: Bearer {{adminToken}}
+
+{
+  "unitPrice": 50.00
+}
+
+###
+### 7f. Get POS units for medicine 2 — should show default first
+GET {{base}}/api/medicineunit/pos/2
+Authorization: Bearer {{pharmacistToken}}
+
+
+###
+# ═══════════════════════════════════════════════════════
+# 8. MEDICINE BATCH (Stock In)
+# ═══════════════════════════════════════════════════════
+
+### 8a. Add a batch for Amoxicillin (medicine 1)
+POST {{base}}/api/medicinebatch
+Content-Type: {{contentType}}
+Authorization: Bearer {{adminToken}}
+
+{
+  "medicineId": 1,
+  "batchNumber": "AMX-2026-001",
+  "supplierId": 1,
+  "manufactureDate": "2026-01-01T00:00:00Z",
+  "expiryDate": "2028-01-01T00:00:00Z",
+  "quantityInTablets": 1000,
+  "purchasePricePerTablet": 3.50,
+  "receivedDate": "2026-08-05T00:00:00Z"
+}
+
+###
+### 8b. Add second batch for Amoxicillin (different expiry — FEFO test)
+POST {{base}}/api/medicinebatch
+Content-Type: {{contentType}}
+Authorization: Bearer {{adminToken}}
+
+{
+  "medicineId": 1,
+  "batchNumber": "AMX-2026-002",
+  "supplierId": 2,
+  "manufactureDate": "2026-03-01T00:00:00Z",
+  "expiryDate": "2027-06-01T00:00:00Z",
+  "quantityInTablets": 500,
+  "purchasePricePerTablet": 3.80,
+  "receivedDate": "2026-08-05T00:00:00Z"
+}
+
+###
+### 8c. Add batch for Paracetamol (medicine 2)
+POST {{base}}/api/medicinebatch
+Content-Type: {{contentType}}
+Authorization: Bearer {{adminToken}}
+
+{
+  "medicineId": 2,
+  "batchNumber": "PCM-2026-001",
+  "supplierId": 1,
+  "manufactureDate": "2025-06-01T00:00:00Z",
+  "expiryDate": "2028-06-01T00:00:00Z",
+  "quantityInTablets": 3000,
+  "purchasePricePerTablet": 1.00,
+  "receivedDate": "2026-08-05T00:00:00Z"
+}
+
+###
+### 8d. Add batch for Ibuprofen (medicine 3)
+POST {{base}}/api/medicinebatch
+Content-Type: {{contentType}}
+Authorization: Bearer {{adminToken}}
+
+{
+  "medicineId": 3,
+  "batchNumber": "IBU-2026-001",
+  "supplierId": 2,
+  "manufactureDate": "2026-01-15T00:00:00Z",
+  "expiryDate": "2028-01-15T00:00:00Z",
+  "quantityInTablets": 800,
+  "purchasePricePerTablet": 2.50,
+  "receivedDate": "2026-08-05T00:00:00Z"
+}
+
+###
+### 8e. Get all batches
+GET {{base}}/api/medicinebatch
+Authorization: Bearer {{pharmacistToken}}
+
+###
+### 8f. Get batches for medicine 1
+GET {{base}}/api/medicinebatch/by-medicine/1
+Authorization: Bearer {{pharmacistToken}}
+
+###
+### 8g. Get near-expiry batches (within 90 days)
+GET {{base}}/api/medicinebatch/near-expiry?days=90
+Authorization: Bearer {{pharmacistToken}}
+
+###
+### 8h. Get batch by ID
+GET {{base}}/api/medicinebatch/1
+Authorization: Bearer {{pharmacistToken}}
+
+###
+### 8i. Bulk create batches
+POST {{base}}/api/medicinebatch/bulk
+Content-Type: {{contentType}}
+Authorization: Bearer {{adminToken}}
+
+{
+  "batches": [
+    {
+      "medicineId": 4,
+      "batchNumber": "MET-2026-001",
+      "supplierId": 1,
+      "expiryDate": "2028-12-01T00:00:00Z",
+      "quantityInTablets": 2000,
+      "purchasePricePerTablet": 2.00
+    },
+    {
+      "medicineId": 5,
+      "batchNumber": "ATV-2026-001",
+      "supplierId": 2,
+      "expiryDate": "2028-06-01T00:00:00Z",
+      "quantityInTablets": 500,
+      "purchasePricePerTablet": 9.00
+    }
+  ]
+}
+
+
+###
+# ═══════════════════════════════════════════════════════
+# 9. CUSTOMER
+# ═══════════════════════════════════════════════════════
+
+### 9a. Create customer 1
+POST {{base}}/api/customer
+Content-Type: {{contentType}}
+Authorization: Bearer {{pharmacistToken}}
+
+{
+  "fullName": "Ram Bahadur",
+  "phoneNumber": "9841000001",
+  "address": "Kathmandu"
+}
+
+###
+### 9b. Create customer 2
+POST {{base}}/api/customer
+Content-Type: {{contentType}}
+Authorization: Bearer {{pharmacistToken}}
+
+{
+  "fullName": "Sita Kumari",
+  "phoneNumber": "9841000002",
+  "address": "Lalitpur"
+}
+
+###
+### 9c. Get all customers
+GET {{base}}/api/customer
+Authorization: Bearer {{pharmacistToken}}
+
+###
+### 9d. Get customer by ID
+GET {{base}}/api/customer/1
+Authorization: Bearer {{pharmacistToken}}
+
+###
+### 9e. Update customer
+PUT {{base}}/api/customer/1
+Content-Type: {{contentType}}
+Authorization: Bearer {{pharmacistToken}}
+
+{
+  "fullName": "Ram Bahadur Thapa",
+  "phoneNumber": "9841000001",
+  "address": "Kathmandu, Baneshwor"
+}
+
+
+###
+# ═══════════════════════════════════════════════════════
+# 10. SALES  (with new MedicineUnitId flow)
+# ═══════════════════════════════════════════════════════
+# MedicineUnitId references:
+#   Medicine 1 (Amoxicillin): Tablet unit ≈ ID 1, Strip unit ≈ ID 2
+#   Medicine 2 (Paracetamol): Tablet unit ≈ ID 3, Strip unit ≈ ID 4
+#   Use GET /api/medicineunit/pos/{medicineId} to confirm actual IDs.
+
+### 10a. Create sale — selling Amoxicillin in strips + Paracetamol in tablets
+POST {{base}}/api/sales
+Content-Type: {{contentType}}
+Authorization: Bearer {{pharmacistToken}}
+
+{
+  "customerId": 1,
+  "pharmacistId": 1,
+  "discountPercent": 5,
+  "paymentMode": "Cash",
+  "items": [
+    {
+      "medicineId": 1,
+      "medicineUnitId": 2,
+      "quantity": 3,
+      "discountPercent": 0
+    },
+    {
+      "medicineId": 2,
+      "medicineUnitId": 3,
+      "quantity": 10,
+      "discountPercent": 10
+    }
+  ]
+}
+
+###
+### 10b. Create sale — selling Ibuprofen by tablet unit with discount
+POST {{base}}/api/sales
+Content-Type: {{contentType}}
+Authorization: Bearer {{pharmacistToken}}
+
+{
+  "customerId": 2,
+  "pharmacistId": 1,
+  "discountPercent": 0,
+  "paymentMode": "Card",
+  "items": [
+    {
+      "medicineId": 3,
+      "medicineUnitId": 5,
+      "quantity": 20,
+      "discountPercent": 5
+    }
+  ]
+}
+
+###
+### 10c. Get all sales
+GET {{base}}/api/sales
+Authorization: Bearer {{pharmacistToken}}
+
+###
+### 10d. Get sale by ID
+GET {{base}}/api/sales/1
+Authorization: Bearer {{pharmacistToken}}
+
+###
+### 10e. Test insufficient stock — request more than available
+POST {{base}}/api/sales
+Content-Type: {{contentType}}
+Authorization: Bearer {{pharmacistToken}}
+
+{
+  "customerId": 1,
+  "pharmacistId": 1,
+  "discountPercent": 0,
+  "paymentMode": "Cash",
+  "items": [
+    {
+      "medicineId": 3,
+      "medicineUnitId": 5,
+      "quantity": 99999,
+      "discountPercent": 0
+    }
+  ]
+}
+
+###
+### 10f. Test invalid MedicineUnitId — unit not attached to medicine
+POST {{base}}/api/sales
+Content-Type: {{contentType}}
+Authorization: Bearer {{pharmacistToken}}
+
+{
+  "customerId": 1,
+  "pharmacistId": 1,
+  "discountPercent": 0,
+  "paymentMode": "Cash",
+  "items": [
+    {
+      "medicineId": 1,
+      "medicineUnitId": 9999,
+      "quantity": 1,
+      "discountPercent": 0
+    }
+  ]
+}
+
+
+###
+# ═══════════════════════════════════════════════════════
+# 11. DISPOSAL (Expired medicines)
+# ═══════════════════════════════════════════════════════
+
+### 11a. Record a disposal
+POST {{base}}/api/disposal
+Content-Type: {{contentType}}
+Authorization: Bearer {{pharmacistToken}}
+
+{
+  "pharmacistId": 1,
+  "items": [
+    {
+      "medicineId": 1,
+      "batchId": 1,
+      "quantityInTablets": 10,
+      "reason": "Near-expiry disposal — batch AMX-2026-001 damaged in transit"
+    }
+  ]
+}
+
+###
+### 11b. Get all disposals
+GET {{base}}/api/disposal
+Authorization: Bearer {{pharmacistToken}}
+
+###
+### 11c. Get disposal by ID
+GET {{base}}/api/disposal/1
+Authorization: Bearer {{pharmacistToken}}
+
+
+###
+# ═══════════════════════════════════════════════════════
+# 12. REPORTS
+# ═══════════════════════════════════════════════════════
+
+### 12a. Full dashboard report
+GET {{base}}/api/report/dashboard
+Authorization: Bearer {{pharmacistToken}}
+
+###
+### 12b. Today's sales summary
+GET {{base}}/api/report/today
+Authorization: Bearer {{pharmacistToken}}
+
+###
+### 12c. This month's sales summary
+GET {{base}}/api/report/this-month
+Authorization: Bearer {{pharmacistToken}}
+
+###
+### 12d. Top 5 medicines by volume
+GET {{base}}/api/report/top-medicines?top=5
+Authorization: Bearer {{pharmacistToken}}
+
+###
+### 12e. Top manufacturers by revenue
+GET {{base}}/api/report/top-manufacturers?top=5
+Authorization: Bearer {{pharmacistToken}}
+
+###
+### 12f. Top suppliers
+GET {{base}}/api/report/top-suppliers?top=5
+Authorization: Bearer {{pharmacistToken}}
+
+###
+### 12g. Monthly sales — last 6 months
+GET {{base}}/api/report/monthly-sales?months=6
+Authorization: Bearer {{pharmacistToken}}
+
+###
+### 12h. Low stock report
+GET {{base}}/api/report/low-stock
+Authorization: Bearer {{pharmacistToken}}
+
+###
+### 12i. Stock consumption in a date range
+GET {{base}}/api/report/stock-consumption?from=2026-08-01&to=2026-08-31&sortBy=quantity
+Authorization: Bearer {{pharmacistToken}}
+
+###
+### 12j. Stock consumption filtered by supplier
+GET {{base}}/api/report/stock-consumption?supplierId=1&sortBy=revenue
+Authorization: Bearer {{pharmacistToken}}
+
+
+###
+# ═══════════════════════════════════════════════════════
+# 13. PHARMACY PROFILE
+# ═══════════════════════════════════════════════════════
+
+### 13a. Create pharmacy profile
+POST {{base}}/api/pharmacyprofile
+Content-Type: {{contentType}}
+Authorization: Bearer {{adminToken}}
+
+{
+  "pharmacyName": "Sunrise Pharmacy",
+  "panNumber": "601234567",
+  "vatNumber": "601234567",
+  "location": "Kathmandu, New Baneshwor",
+  "phoneNumbers": [
+    { "phoneNumber": "01-4567890", "label": "Main" },
+    { "phoneNumber": "9841999999", "label": "Mobile" }
+  ]
+}
+
+###
+### 13b. Get all pharmacy profiles
+GET {{base}}/api/pharmacyprofile
+Authorization: Bearer {{pharmacistToken}}
+
+###
+### 13c. Get pharmacy profile by ID
+GET {{base}}/api/pharmacyprofile/1
+Authorization: Bearer {{pharmacistToken}}
+
+###
+### 13d. Update pharmacy profile
+PUT {{base}}/api/pharmacyprofile/1
+Content-Type: {{contentType}}
+Authorization: Bearer {{adminToken}}
+
+{
+  "pharmacyName": "Sunrise Pharmacy Pvt. Ltd.",
+  "panNumber": "601234567",
+  "vatNumber": "601234567",
+  "location": "Kathmandu, New Baneshwor, Ward 7",
+  "phoneNumbers": [
+    { "phoneNumber": "01-4567890", "label": "Landline" },
+    { "phoneNumber": "9841999999", "label": "Mobile" },
+    { "phoneNumber": "9851888888", "label": "Alternate" }
+  ]
+}
+
+
+###
+# ═══════════════════════════════════════════════════════
+# 14. EDGE CASES / SECURITY CHECKS
+# ═══════════════════════════════════════════════════════
+
+### 14a. No token — expect 401
+GET {{base}}/api/medicine
+
+###
+### 14b. Pharmacist tries to delete a medicine — expect 403
+DELETE {{base}}/api/medicine/1
+Authorization: Bearer {{pharmacistToken}}
+
+###
+### 14c. Admin deletes medicine — expect 200
+DELETE {{base}}/api/medicine/3
+Authorization: Bearer {{adminToken}}
+
+###
+### 14d. Get deleted medicine — expect 404
+GET {{base}}/api/medicine/3
+Authorization: Bearer {{pharmacistToken}}
+
+###
+### 14e. Delete a category — expect 200
+DELETE {{base}}/api/category/2
+Authorization: Bearer {{adminToken}}
+
+###
+### 14f. Pharmacist tries to create a UoM — expect 403
+POST {{base}}/api/uom
+Content-Type: {{contentType}}
+Authorization: Bearer {{pharmacistToken}}
+
+{
+  "name": "Should Fail",
+  "symbol": "x"
+}
+
+###
+### 14g. Deactivate a MedicineUnit (non-base unit only)
+DELETE {{base}}/api/medicineunit/3
+Authorization: Bearer {{adminToken}}
+
+###
+### 14h. Try to deactivate a base unit — expect 400
+DELETE {{base}}/api/medicineunit/1
+Authorization: Bearer {{adminToken}}

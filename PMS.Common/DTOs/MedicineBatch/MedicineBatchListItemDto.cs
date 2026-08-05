@@ -4,6 +4,7 @@ namespace PMS.Common.DTOs.MedicineBatch;
 public class MedicineBatchListItemDto
 {
     public int BatchId { get; set; }
+    public int MedicineId { get; set; }
     public string MedicineName { get; set; } = string.Empty;
     public string BatchNumber { get; set; } = string.Empty;
     public string? SupplierName { get; set; }

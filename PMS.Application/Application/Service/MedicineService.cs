@@ -17,22 +17,16 @@ public class MedicineService : IMedicineService
     public async Task<IEnumerable<MedicineListItemDto>> GetAllAsync()
     {
         var medicines = await _repo.GetAllAsync();
-        return medicines.Select(m => new MedicineListItemDto
-        {
-            MedicineId           = m.MedicineId,
-            Name                 = m.Name,
-            GenericName          = m.GenericName,
-            CategoryName         = m.Category?.CategoryName,
-            ManufacturerName     = m.Manufacturer?.Name,
-            TabletsPerStrip      = m.TabletsPerStrip,
-            StrapsPerBox         = m.StrapsPerBox,
-            TotalTabletsPerBox   = m.TotalTabletsPerBox,
-            StripPrice           = m.StripPrice,
-            TabletPrice          = m.TabletPrice,
-            TotalStockInTablets  = m.TotalStockInTablets,
-            IsActive             = m.IsActive,
-            RequiresPrescription = m.RequiresPrescription
-        });
+        return medicines.Select(MapToListItem);
+    }
+
+    public async Task<IEnumerable<MedicineListItemDto>> SearchAsync(string query)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+            return await GetAllAsync();
+
+        var medicines = await _repo.SearchAsync(query);
+        return medicines.Select(MapToListItem);
     }
 
     public async Task<MedicineResponseDto?> GetByIdAsync(int id)
@@ -195,6 +189,23 @@ public class MedicineService : IMedicineService
     }
 
     // ── Mapping helper ─────────────────────────────────────────────────────────
+    private static MedicineListItemDto MapToListItem(Medicine m) => new()
+    {
+        MedicineId           = m.MedicineId,
+        Name                 = m.Name,
+        GenericName          = m.GenericName,
+        CategoryName         = m.Category?.CategoryName,
+        ManufacturerName     = m.Manufacturer?.Name,
+        TabletsPerStrip      = m.TabletsPerStrip,
+        StrapsPerBox         = m.StrapsPerBox,
+        TotalTabletsPerBox   = m.TotalTabletsPerBox,
+        StripPrice           = m.StripPrice,
+        TabletPrice          = m.TabletPrice,
+        TotalStockInTablets  = m.TotalStockInTablets,
+        IsActive             = m.IsActive,
+        RequiresPrescription = m.RequiresPrescription
+    };
+
     private static MedicineResponseDto MapToResponse(Medicine m) => new()
     {
         MedicineId           = m.MedicineId,

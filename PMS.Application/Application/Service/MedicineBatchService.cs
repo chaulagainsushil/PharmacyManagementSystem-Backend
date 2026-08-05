@@ -140,6 +140,7 @@ public class MedicineBatchService : IMedicineBatchService
     private static MedicineBatchListItemDto MapToListItem(MedicineBatch b) => new()
     {
         BatchId                = b.BatchId,
+        MedicineId             = b.MedicineId,
         MedicineName           = b.Medicine?.Name ?? string.Empty,
         BatchNumber            = b.BatchNumber,
         SupplierName           = b.Supplier?.Name,

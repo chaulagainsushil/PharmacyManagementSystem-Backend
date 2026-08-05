@@ -43,9 +43,18 @@ public class ReportService : IReportService
         return await _repo.GetSalesSummaryAsync(from, to);
     }
 
+    public Task<List<MonthlySalesSummaryDto>> GetMonthlySalesAsync(int months = 12) =>
+        _repo.GetMonthlySalesAsync(months);
+
+    public Task<List<LowStockItemDto>> GetLowStockAsync() =>
+        _repo.GetLowStockAsync();
+
+    public Task<StockConsumptionReportDto> GetStockConsumptionAsync(
+        DateTime? from, DateTime? to, int? supplierId, int? manufacturerId, string sortBy = "quantity") =>
+        _repo.GetStockConsumptionAsync(from, to, supplierId, manufacturerId, sortBy);
+
     public async Task<List<TopMedicineDto>> GetTopMedicinesAsync(int top = 10)
     {
-        // All-time top medicines
         var from = DateTime.MinValue;
         var to   = DateTime.MaxValue;
         return await _repo.GetTopMedicinesAsync(from, to, top);
