@@ -1,6 +1,7 @@
 using PMS.Application.Application.Interface.Repository;
 using PMS.Application.Application.Interface.Service;
 using PMS.Common.DTOs.Medicine;
+using PMS.Common.DTOs.Uom;
 using PMS.Models.Models;
 
 namespace PMS.Application.Application.Service;
@@ -224,6 +225,19 @@ public class MedicineService : IMedicineService
         RequiresPrescription = m.RequiresPrescription,
         IsActive             = m.IsActive,
         TotalStockInTablets  = m.TotalStockInTablets,
-        CreatedAt            = m.CreatedAt
+        CreatedAt            = m.CreatedAt,
+        Units                = m.Units.Select(mu => new MedicineUnitDto
+        {
+            MedicineUnitId         = mu.MedicineUnitId,
+            MedicineId             = mu.MedicineId,
+            UnitOfMeasureId        = mu.UnitOfMeasureId,
+            UomName                = mu.UnitOfMeasure?.Name ?? string.Empty,
+            UomSymbol              = mu.UnitOfMeasure?.Symbol ?? string.Empty,
+            ConversionFactorToBase = mu.ConversionFactorToBase,
+            IsBaseUnit             = mu.IsBaseUnit,
+            IsDefault              = mu.IsDefault,
+            IsActive               = mu.IsActive,
+            UnitPrice              = mu.UnitPrice
+        }).ToList()
     };
 }

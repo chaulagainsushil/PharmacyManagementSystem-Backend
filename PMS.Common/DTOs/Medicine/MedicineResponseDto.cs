@@ -1,3 +1,5 @@
+using PMS.Common.DTOs.Uom;
+
 namespace PMS.Common.DTOs.Medicine;
 
 /// <summary>Full detail response — used for GET by ID.</summary>
@@ -25,4 +27,7 @@ public class MedicineResponseDto
 
     public int TotalStockInTablets { get; set; }
     public DateTime CreatedAt { get; set; }
+
+    /// <summary>All units attached to this medicine (active and inactive), default unit first.</summary>
+    public List<MedicineUnitDto> Units { get; set; } = new();
 }

@@ -48,6 +48,8 @@ public class MedicineRepository : IMedicineRepository
             .Include(m => m.Category)
             .Include(m => m.Manufacturer)
             .Include(m => m.Batches)
+            .Include(m => m.Units.OrderByDescending(u => u.IsDefault).ThenBy(u => u.UnitOfMeasure.Name))
+                .ThenInclude(u => u.UnitOfMeasure)
             .AsNoTracking()
             .FirstOrDefaultAsync(m => m.MedicineId == id);
     }
