@@ -4,11 +4,12 @@ WORKDIR /src
 
 # Copy solution and all project files first (better layer caching)
 COPY PMS.sln ./
-COPY PMS/PMS.csproj                     PMS/
-COPY PMS.Application/PMS.Application.csproj   PMS.Application/
-COPY PMS.Repository/PMS.Repository.csproj     PMS.Repository/
-COPY PMS.Models/PMS.Models.csproj             PMS.Models/
-COPY PMS.Common/PMS.Common.csproj             PMS.Common/
+COPY PMS/PMS.csproj                                 PMS/
+COPY PMS.Application/PMS.Application.csproj         PMS.Application/
+COPY PMS.Repository/PMS.Repository.csproj           PMS.Repository/
+COPY PMS.Models/PMS.Models.csproj                   PMS.Models/
+COPY PMS.Common/PMS.Common.csproj                   PMS.Common/
+COPY PMS.Tests/PMS.Tests.csproj                     PMS.Tests/
 
 # Restore dependencies
 RUN dotnet restore PMS.sln
