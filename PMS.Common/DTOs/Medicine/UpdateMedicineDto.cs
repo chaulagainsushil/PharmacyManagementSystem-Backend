@@ -31,6 +31,7 @@ public class UpdateMedicineDto
 
     public bool RequiresPrescription { get; set; }
     public bool IsActive { get; set; }
+    public DateTime UpdatedAt { get; set; }
 
     /// <summary>
     /// When provided, replaces all existing units for this medicine.

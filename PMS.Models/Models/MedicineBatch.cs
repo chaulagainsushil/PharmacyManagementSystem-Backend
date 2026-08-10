@@ -1,8 +1,12 @@
 namespace PMS.Models.Models;
 
-public class MedicineBatch
+public class MedicineBatch : IHasTenant
 {
     public int BatchId { get; set; }
+
+    /// <inheritdoc/>
+    public Guid TenantId { get; set; }
+
     public int MedicineId { get; set; }
     public string BatchNumber { get; set; } = string.Empty;
     public int? SupplierId { get; set; }
@@ -13,6 +17,7 @@ public class MedicineBatch
     public int QuantityInTablets { get; set; }
     public decimal PurchasePricePerTablet { get; set; }
     public DateTime ReceivedDate { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     public Medicine Medicine { get; set; } = null!;
     public Supplier? Supplier { get; set; }

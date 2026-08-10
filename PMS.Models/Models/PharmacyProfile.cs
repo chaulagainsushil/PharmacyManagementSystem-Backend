@@ -1,13 +1,20 @@
 namespace PMS.Models.Models;
 
 /// <summary>
-/// Stores the single pharmacy's identity information —
-/// name, logo, signature image, PAN, VAT, location and contact numbers.
-/// Only one active profile should exist at a time; the API enforces this.
+/// Tenant root — each PharmacyProfile represents one independent tenant.
+/// TenantId is the stable, globally-unique identifier used across all tenant-scoped entities.
+/// PharmacyProfileId remains the int PK for FK relationships within this tenant's data.
 /// </summary>
 public class PharmacyProfile
 {
     public int PharmacyProfileId { get; set; }
+
+    /// <summary>
+    /// Stable, globally-unique tenant identifier.
+    /// Embedded into every JWT as the "tenantId" claim and used by
+    /// global query filters to isolate each tenant's data.
+    /// </summary>
+    public Guid TenantId { get; set; } = Guid.NewGuid();
 
     public string PharmacyName { get; set; } = string.Empty;
 
@@ -30,4 +37,5 @@ public class PharmacyProfile
 
     // ── Navigation ────────────────────────────────────────────────────────────
     public ICollection<PharmacyPhoneNumber> PhoneNumbers { get; set; } = new List<PharmacyPhoneNumber>();
+    public ICollection<Subscription> Subscriptions { get; set; } = new List<Subscription>();
 }

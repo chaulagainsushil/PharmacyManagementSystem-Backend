@@ -24,4 +24,6 @@ public class UpdateUomDto
     public string Symbol { get; set; } = string.Empty;
 
     public bool IsActive { get; set; } = true;
+
+    public DateTime UpdatedAt { get; set; }
 }

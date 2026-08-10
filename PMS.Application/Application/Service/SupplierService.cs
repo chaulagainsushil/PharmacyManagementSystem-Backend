@@ -1,5 +1,6 @@
 using PMS.Application.Application.Interface.Repository;
 using PMS.Application.Application.Interface.Service;
+using PMS.Common;
 using PMS.Common.DTOs.Supplier;
 using PMS.Models.Models;
 
@@ -13,21 +14,12 @@ public class SupplierService : ISupplierService
 
     public async Task<IEnumerable<SupplierListItemDto>> GetAllAsync()
     {
-        var suppliers = await _repo.GetAllAsync();
-        return suppliers.Select(s => new SupplierListItemDto
-        {
-            SupplierId = s.SupplierId,
-            Name       = s.Name,
-            Phone      = s.Phone,
-            Address    = s.Address,
-            BatchCount = s.Batches.Count
-        });
+        return await _repo.GetAllAsync();
     }
 
     public async Task<SupplierResponseDto?> GetByIdAsync(int id)
     {
-        var supplier = await _repo.GetByIdAsync(id);
-        return supplier is null ? null : MapToResponse(supplier);
+        return await _repo.GetByIdAsync(id);
     }
 
     public async Task<(bool Success, string Message, SupplierResponseDto? Data)> CreateAsync(
@@ -43,26 +35,40 @@ public class SupplierService : ISupplierService
             Address = dto.Address?.Trim()
         };
 
-        var created = await _repo.CreateAsync(supplier);
-        return (true, "Supplier created successfully.", MapToResponse(created));
+        var created  = await _repo.CreateAsync(supplier);
+        var response = await _repo.GetByIdAsync(created.SupplierId);
+        return (true, "Supplier created successfully.", response);
     }
 
-    public async Task<(bool Success, string Message, SupplierResponseDto? Data)> UpdateAsync(
+    public async Task<(bool Success, string Message, bool IsConflict, SupplierResponseDto? Data)> UpdateAsync(
         int id, UpdateSupplierDto dto)
     {
-        var supplier = await _repo.GetByIdAsync(id);
-        if (supplier is null)
-            return (false, $"Supplier with ID {id} not found.", null);
+        // 1. Read current DTO (includes UpdatedAt)
+        var existing = await _repo.GetByIdAsync(id);
+        if (existing is null)
+            return (false, $"Supplier with ID {id} not found.", false, null);
 
+        // 2. Optimistic concurrency check
+        if (!ConcurrencyHelper.Matches(existing.UpdatedAt, dto.UpdatedAt))
+            return (false, "The record was modified by another user. Please refresh and try again.", true, null);
+
+        // 3. Business rule: duplicate name
         if (await _repo.ExistsByNameAsync(dto.Name, excludeId: id))
-            return (false, $"Supplier '{dto.Name}' already exists.", null);
+            return (false, $"Supplier '{dto.Name}' already exists.", false, null);
 
-        supplier.Name    = dto.Name.Trim();
-        supplier.Phone   = dto.Phone?.Trim();
-        supplier.Address = dto.Address?.Trim();
+        // 4. Fetch tracked entity and mutate
+        var entity = await _repo.GetEntityByIdAsync(id);
+        if (entity is null)
+            return (false, $"Supplier with ID {id} not found.", false, null);
 
-        var updated = await _repo.UpdateAsync(supplier);
-        return (true, "Supplier updated successfully.", MapToResponse(updated));
+        entity.Name    = dto.Name.Trim();
+        entity.Phone   = dto.Phone?.Trim();
+        entity.Address = dto.Address?.Trim();
+
+        await _repo.UpdateAsync(entity);
+
+        var updated = await _repo.GetByIdAsync(id);
+        return (true, "Supplier updated successfully.", false, updated);
     }
 
     public async Task<(bool Success, string Message)> DeleteAsync(int id)
@@ -77,13 +83,4 @@ public class SupplierService : ISupplierService
         await _repo.DeleteAsync(id);
         return (true, "Supplier deleted successfully.");
     }
-
-    private static SupplierResponseDto MapToResponse(Supplier s) => new()
-    {
-        SupplierId = s.SupplierId,
-        Name       = s.Name,
-        Phone      = s.Phone,
-        Address    = s.Address,
-        BatchCount = s.Batches?.Count ?? 0
-    };
 }

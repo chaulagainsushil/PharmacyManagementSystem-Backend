@@ -1,5 +1,6 @@
 using PMS.Application.Application.Interface.Repository;
 using PMS.Application.Application.Interface.Service;
+using PMS.Common;
 using PMS.Common.DTOs.Medicine;
 using PMS.Common.DTOs.Uom;
 using PMS.Models.Models;
@@ -17,8 +18,7 @@ public class MedicineService : IMedicineService
 
     public async Task<IEnumerable<MedicineListItemDto>> GetAllAsync()
     {
-        var medicines = await _repo.GetAllAsync();
-        return medicines.Select(MapToListItem);
+        return await _repo.GetAllAsync();
     }
 
     public async Task<IEnumerable<MedicineListItemDto>> SearchAsync(string query)
@@ -26,16 +26,12 @@ public class MedicineService : IMedicineService
         if (string.IsNullOrWhiteSpace(query))
             return await GetAllAsync();
 
-        var medicines = await _repo.SearchAsync(query);
-        return medicines.Select(MapToListItem);
+        return await _repo.SearchAsync(query);
     }
 
     public async Task<MedicineResponseDto?> GetByIdAsync(int id)
     {
-        var medicine = await _repo.GetByIdAsync(id);
-        if (medicine is null) return null;
-
-        return MapToResponse(medicine);
+        return await _repo.GetByIdAsync(id);
     }
 
     public async Task<(bool Success, string Message, MedicineResponseDto? Data)> CreateAsync(
@@ -78,7 +74,7 @@ public class MedicineService : IMedicineService
         }
 
         var full = await _repo.GetByIdAsync(created.MedicineId);
-        return (true, "Medicine created successfully.", MapToResponse(full!));
+        return (true, "Medicine created successfully.", full);
     }
 
     public async Task<BulkCreateMedicineResultDto> CreateBulkAsync(IReadOnlyList<CreateMedicineDto> dtos)
@@ -144,7 +140,7 @@ public class MedicineService : IMedicineService
 
         if (toInsert.Count > 0)
         {
-            var saved = await _repo.CreateBulkAsync(toInsert.Select(t => t.Entity).ToList());
+            await _repo.CreateBulkAsync(toInsert.Select(t => t.Entity).ToList());
 
             foreach (var (idx, entity, unitDtos) in toInsert)
             {
@@ -160,7 +156,7 @@ public class MedicineService : IMedicineService
                     Index   = idx,
                     Success = true,
                     Message = "Created successfully.",
-                    Data    = MapToResponse(full!)
+                    Data    = full
                 });
             }
         }
@@ -176,37 +172,48 @@ public class MedicineService : IMedicineService
         };
     }
 
-    public async Task<(bool Success, string Message, MedicineResponseDto? Data)> UpdateAsync(
+    public async Task<(bool Success, string Message, bool IsConflict, MedicineResponseDto? Data)> UpdateAsync(
         int id, UpdateMedicineDto dto)
     {
-        var medicine = await _repo.GetByIdAsync(id);
-        if (medicine is null)
-            return (false, $"Medicine with ID {id} not found.", null);
+        // 1. Read current DTO (includes UpdatedAt)
+        var existing = await _repo.GetByIdAsync(id);
+        if (existing is null)
+            return (false, $"Medicine with ID {id} not found.", false, null);
 
+        // 2. Optimistic concurrency check
+        if (!ConcurrencyHelper.Matches(existing.UpdatedAt, dto.UpdatedAt))
+            return (false, "The record was modified by another user. Please refresh and try again.", true, null);
+
+        // 3. Business rule: duplicate name
         if (await _repo.ExistsByNameAsync(dto.Name, excludeId: id))
-            return (false, $"Medicine '{dto.Name}' already exists.", null);
+            return (false, $"Medicine '{dto.Name}' already exists.", false, null);
 
-        // Validate inline units if provided
+        // 4. Validate inline units if provided
         if (dto.Units is { Count: > 0 })
         {
             var unitError = ValidateInlineUnits(dto.Units);
             if (unitError is not null)
-                return (false, unitError, null);
+                return (false, unitError, false, null);
         }
 
-        medicine.Name                 = dto.Name.Trim();
-        medicine.GenericName          = dto.GenericName?.Trim();
-        medicine.CategoryId           = dto.CategoryId;
-        medicine.ManufacturerId       = dto.ManufacturerId;
-        medicine.TabletsPerStrip      = dto.TabletsPerStrip;
-        medicine.StrapsPerBox         = dto.StrapsPerBox;
-        medicine.StripPrice           = dto.StripPrice;
-        medicine.TabletPrice          = dto.TabletPrice;
-        medicine.ReorderLevel         = dto.ReorderLevel;
-        medicine.RequiresPrescription = dto.RequiresPrescription;
-        medicine.IsActive             = dto.IsActive;
+        // 5. Fetch tracked entity and mutate
+        var entity = await _repo.GetEntityByIdAsync(id);
+        if (entity is null)
+            return (false, $"Medicine with ID {id} not found.", false, null);
 
-        await _repo.UpdateAsync(medicine);
+        entity.Name                 = dto.Name.Trim();
+        entity.GenericName          = dto.GenericName?.Trim();
+        entity.CategoryId           = dto.CategoryId;
+        entity.ManufacturerId       = dto.ManufacturerId;
+        entity.TabletsPerStrip      = dto.TabletsPerStrip;
+        entity.StrapsPerBox         = dto.StrapsPerBox;
+        entity.StripPrice           = dto.StripPrice;
+        entity.TabletPrice          = dto.TabletPrice;
+        entity.ReorderLevel         = dto.ReorderLevel;
+        entity.RequiresPrescription = dto.RequiresPrescription;
+        entity.IsActive             = dto.IsActive;
+
+        await _repo.UpdateAsync(entity);
 
         // Replace units only when explicitly supplied
         if (dto.Units is { Count: > 0 })
@@ -216,7 +223,7 @@ public class MedicineService : IMedicineService
         }
 
         var full = await _repo.GetByIdAsync(id);
-        return (true, "Medicine updated successfully.", MapToResponse(full!));
+        return (true, "Medicine updated successfully.", false, full);
     }
 
     public async Task<(bool Success, string Message)> DeleteAsync(int id)
@@ -231,14 +238,6 @@ public class MedicineService : IMedicineService
 
     // ── Validation ─────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Returns an error message if the inline units list is invalid, or null if valid.
-    /// Rules:
-    ///   - Exactly one IsBaseUnit = true
-    ///   - Exactly one IsDefault = true
-    ///   - No duplicate UnitOfMeasureId values
-    ///   - The base unit must have ConversionFactorToBase = 1
-    /// </summary>
     private static string? ValidateInlineUnits(List<CreateMedicineUnitDto> units)
     {
         var baseCount    = units.Count(u => u.IsBaseUnit);
@@ -277,57 +276,4 @@ public class MedicineService : IMedicineService
             IsActive               = true,
             UnitPrice              = u.UnitPrice
         }).ToList();
-
-    // ── Mapping ────────────────────────────────────────────────────────────────
-
-    private static MedicineListItemDto MapToListItem(Medicine m) => new()
-    {
-        MedicineId           = m.MedicineId,
-        Name                 = m.Name,
-        GenericName          = m.GenericName,
-        CategoryName         = m.Category?.CategoryName,
-        ManufacturerName     = m.Manufacturer?.Name,
-        TabletsPerStrip      = m.TabletsPerStrip,
-        StrapsPerBox         = m.StrapsPerBox,
-        TotalTabletsPerBox   = m.TotalTabletsPerBox,
-        StripPrice           = m.StripPrice,
-        TabletPrice          = m.TabletPrice,
-        TotalStockInTablets  = m.TotalStockInTablets,
-        IsActive             = m.IsActive,
-        RequiresPrescription = m.RequiresPrescription
-    };
-
-    private static MedicineResponseDto MapToResponse(Medicine m) => new()
-    {
-        MedicineId           = m.MedicineId,
-        Name                 = m.Name,
-        GenericName          = m.GenericName,
-        CategoryId           = m.CategoryId,
-        CategoryName         = m.Category?.CategoryName,
-        ManufacturerId       = m.ManufacturerId,
-        ManufacturerName     = m.Manufacturer?.Name,
-        TabletsPerStrip      = m.TabletsPerStrip,
-        StrapsPerBox         = m.StrapsPerBox,
-        TotalTabletsPerBox   = m.TotalTabletsPerBox,
-        StripPrice           = m.StripPrice,
-        TabletPrice          = m.TabletPrice,
-        ReorderLevel         = m.ReorderLevel,
-        RequiresPrescription = m.RequiresPrescription,
-        IsActive             = m.IsActive,
-        TotalStockInTablets  = m.TotalStockInTablets,
-        CreatedAt            = m.CreatedAt,
-        Units                = m.Units.Select(mu => new MedicineUnitDto
-        {
-            MedicineUnitId         = mu.MedicineUnitId,
-            MedicineId             = mu.MedicineId,
-            UnitOfMeasureId        = mu.UnitOfMeasureId,
-            UomName                = mu.UnitOfMeasure?.Name ?? string.Empty,
-            UomSymbol              = mu.UnitOfMeasure?.Symbol ?? string.Empty,
-            ConversionFactorToBase = mu.ConversionFactorToBase,
-            IsBaseUnit             = mu.IsBaseUnit,
-            IsDefault              = mu.IsDefault,
-            IsActive               = mu.IsActive,
-            UnitPrice              = mu.UnitPrice
-        }).ToList()
-    };
 }

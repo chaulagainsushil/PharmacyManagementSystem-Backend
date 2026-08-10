@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using PMS.Application.Application.Interface.Repository;
+using PMS.Common.DTOs.Customer;
 using PMS.Models.Models;
 using PMS.Repository.Data;
 
@@ -11,18 +12,40 @@ public class CustomerRepository : ICustomerRepository
 
     public CustomerRepository(ApplicationDbContext db) => _db = db;
 
-    public async Task<IEnumerable<Customer>> GetAllAsync() =>
+    public async Task<IEnumerable<CustomerListItemDto>> GetAllAsync() =>
         await _db.Customers
-            .Include(c => c.Sales)
             .AsNoTracking()
             .OrderBy(c => c.FullName)
+            .Select(c => new CustomerListItemDto
+            {
+                CustomerId   = c.CustomerId,
+                FullName     = c.FullName,
+                PhoneNumber  = c.PhoneNumber,
+                Address      = c.Address,
+                TotalSales   = c.Sales.Count(),
+                CreatedAt    = c.CreatedAt,
+                UpdatedAt    = c.UpdatedAt
+            })
             .ToListAsync();
 
-    public async Task<Customer?> GetByIdAsync(int id) =>
+    public async Task<CustomerResponseDto?> GetByIdAsync(int id) =>
         await _db.Customers
-            .Include(c => c.Sales)
             .AsNoTracking()
-            .FirstOrDefaultAsync(c => c.CustomerId == id);
+            .Where(c => c.CustomerId == id)
+            .Select(c => new CustomerResponseDto
+            {
+                CustomerId  = c.CustomerId,
+                FullName    = c.FullName,
+                PhoneNumber = c.PhoneNumber,
+                Address     = c.Address,
+                TotalSales  = c.Sales.Count(),
+                CreatedAt   = c.CreatedAt,
+                UpdatedAt   = c.UpdatedAt
+            })
+            .FirstOrDefaultAsync();
+
+    public async Task<Customer?> GetEntityByIdAsync(int id) =>
+        await _db.Customers.FindAsync(id);
 
     public async Task<bool> ExistsByPhoneAsync(string phone, int? excludeId = null) =>
         await _db.Customers

@@ -14,10 +14,10 @@ public interface IMedicineUnitService
     Task<(bool Success, string Message, MedicineUnitDto? Data)> AddUnitAsync(AddMedicineUnitCommand cmd);
 
     /// <summary>Set which unit is the POS default for a medicine.</summary>
-    Task<(bool Success, string Message)> SetDefaultUnitAsync(SetDefaultUnitCommand cmd);
+    Task<(bool Success, string Message, bool IsConflict)> SetDefaultUnitAsync(SetDefaultUnitCommand cmd);
 
     /// <summary>Update the price for an existing MedicineUnit.</summary>
-    Task<(bool Success, string Message, MedicineUnitDto? Data)> UpdatePriceAsync(
+    Task<(bool Success, string Message, bool IsConflict, MedicineUnitDto? Data)> UpdatePriceAsync(
         int medicineUnitId, UpdateMedicineUnitPriceCommand cmd);
 
     /// <summary>Deactivate a unit (soft-delete). Base units cannot be deactivated.</summary>

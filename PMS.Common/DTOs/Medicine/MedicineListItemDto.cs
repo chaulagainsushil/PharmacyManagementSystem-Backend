@@ -16,4 +16,5 @@ public class MedicineListItemDto
     public int TotalStockInTablets { get; set; }
     public bool IsActive { get; set; }
     public bool RequiresPrescription { get; set; }
+    public DateTime UpdatedAt { get; set; }
 }

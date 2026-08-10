@@ -20,12 +20,12 @@ public class DisposalService : IDisposalService
         if (dto.Items == null || dto.Items.Count == 0)
             return (false, "At least one item is required.", null);
 
-        var deductions = new List<(int BatchId, int TabletsToDeduct)>();
+        var deductions   = new List<(int BatchId, int TabletsToDeduct)>();
         var plannedItems = new List<ExpiredMedicineDisposalItem>();
 
         foreach (var itemDto in dto.Items)
         {
-            var batch = await _repo.GetBatchWithMedicineAsync(itemDto.BatchId);
+            var batch = await _repo.GetBatchAsync(itemDto.BatchId);
             if (batch is null)
                 return (false, $"Batch with ID {itemDto.BatchId} not found.", null);
 
@@ -37,10 +37,10 @@ public class DisposalService : IDisposalService
 
             plannedItems.Add(new ExpiredMedicineDisposalItem
             {
-                MedicineId         = batch.MedicineId,
-                BatchId            = itemDto.BatchId,
-                QuantityInTablets  = itemDto.QuantityInTablets,
-                Reason             = itemDto.Reason.Trim(),
+                MedicineId        = batch.MedicineId,
+                BatchId           = itemDto.BatchId,
+                QuantityInTablets = itemDto.QuantityInTablets,
+                Reason            = itemDto.Reason.Trim()
             });
 
             deductions.Add((itemDto.BatchId, itemDto.QuantityInTablets));
@@ -50,50 +50,24 @@ public class DisposalService : IDisposalService
 
         var disposal = new ExpiredMedicineDisposal
         {
-            DisposalNumber  = disposalNumber,
-            PharmacistId    = dto.PharmacistId,
-            DisposalDate    = DateTime.UtcNow,
-            CreatedAt       = DateTime.UtcNow,
-            Items           = plannedItems,
+            DisposalNumber = disposalNumber,
+            PharmacistId   = dto.PharmacistId,
+            DisposalDate   = DateTime.UtcNow,
+            CreatedAt      = DateTime.UtcNow,
+            Items          = plannedItems
         };
 
         var saved = await _repo.SaveDisposalAsync(disposal, deductions);
-        var full  = await _repo.GetDisposalWithDetailsAsync(saved.DisposalId)
+
+        var full = await _repo.GetDisposalWithDetailsAsync(saved.DisposalId)
             ?? throw new InvalidOperationException("Failed to reload disposal after save.");
 
-        return (true, "Disposal recorded successfully.", MapToResponse(full));
+        return (true, "Disposal recorded successfully.", full);
     }
 
-    public async Task<IReadOnlyList<DisposalResponseDto>> GetAllAsync()
-    {
-        var list = await _repo.GetAllDisposalsAsync();
-        return list.Select(MapToResponse).ToList();
-    }
+    public async Task<IReadOnlyList<DisposalResponseDto>> GetAllAsync() =>
+        await _repo.GetAllDisposalsAsync();
 
-    public async Task<DisposalResponseDto?> GetByIdAsync(int id)
-    {
-        var d = await _repo.GetDisposalWithDetailsAsync(id);
-        return d is null ? null : MapToResponse(d);
-    }
-
-    // ── Mapping ────────────────────────────────────────────────────────────────
-
-    private static DisposalResponseDto MapToResponse(ExpiredMedicineDisposal d) => new()
-    {
-        DisposalId     = d.DisposalId,
-        DisposalNumber = d.DisposalNumber,
-        PharmacistId   = d.PharmacistId,
-        PharmacistName = d.Pharmacist?.FullName ?? string.Empty,
-        DisposalDate   = d.DisposalDate,
-        Items          = d.Items.Select(i => new DisposalItemResponseDto
-        {
-            DisposalItemId    = i.DisposalItemId,
-            MedicineId        = i.MedicineId,
-            MedicineName      = i.Medicine?.Name ?? string.Empty,
-            BatchId           = i.BatchId,
-            BatchNumber       = i.Batch?.BatchNumber ?? string.Empty,
-            QuantityInTablets = i.QuantityInTablets,
-            Reason            = i.Reason,
-        }).ToList(),
-    };
+    public async Task<DisposalResponseDto?> GetByIdAsync(int id) =>
+        await _repo.GetDisposalWithDetailsAsync(id);
 }

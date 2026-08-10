@@ -24,4 +24,6 @@ public class UpdatePharmacyProfileDto
     [Required(ErrorMessage = "At least one phone number is required.")]
     [MinLength(1, ErrorMessage = "At least one phone number is required.")]
     public List<PharmacyPhoneNumberDto> PhoneNumbers { get; set; } = new();
+
+    public DateTime UpdatedAt { get; set; }
 }

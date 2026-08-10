@@ -74,32 +74,33 @@ public class ReportRepository : IReportRepository
 
     // ── Low Stock ─────────────────────────────────────────────────────────────
 
-    public async Task<List<LowStockItemDto>> GetLowStockAsync()
-    {
-        // TotalStockInTablets is a computed property ignored by EF, so we load to client first.
-        var medicines = await _db.Medicines
-            .Include(m => m.Category)
-            .Include(m => m.Manufacturer)
-            .Include(m => m.Batches)
+    public async Task<List<LowStockItemDto>> GetLowStockAsync() =>
+        await _db.Medicines
             .Where(m => m.IsActive)
-            .ToListAsync();
-
-        return medicines
-            .Where(m => m.TotalStockInTablets <= m.ReorderLevel)
-            .OrderBy(m => m.TotalStockInTablets)
+            .Select(m => new
+            {
+                m.MedicineId,
+                m.Name,
+                m.GenericName,
+                m.ReorderLevel,
+                CategoryName     = m.Category != null ? m.Category.CategoryName : null,
+                ManufacturerName = m.Manufacturer != null ? m.Manufacturer.Name : null,
+                TotalStock       = m.Batches.Sum(b => (int?)b.QuantityInTablets) ?? 0
+            })
+            .Where(m => m.TotalStock <= m.ReorderLevel)
+            .OrderBy(m => m.TotalStock)
             .Select(m => new LowStockItemDto
             {
                 MedicineId          = m.MedicineId,
                 MedicineName        = m.Name,
                 GenericName         = m.GenericName,
-                CategoryName        = m.Category?.CategoryName,
-                ManufacturerName    = m.Manufacturer?.Name,
-                TotalStockInTablets = m.TotalStockInTablets,
+                CategoryName        = m.CategoryName,
+                ManufacturerName    = m.ManufacturerName,
+                TotalStockInTablets = m.TotalStock,
                 ReorderLevel        = m.ReorderLevel,
-                ShortfallInTablets  = m.ReorderLevel - m.TotalStockInTablets,
+                ShortfallInTablets  = m.ReorderLevel - m.TotalStock
             })
-            .ToList();
-    }
+            .ToListAsync();
 
     // ── Stock Consumption ─────────────────────────────────────────────────────
 
@@ -110,19 +111,12 @@ public class ReportRepository : IReportRepository
         var fromDate = DateTime.SpecifyKind((from ?? DateTime.MinValue).Date,           DateTimeKind.Utc);
 
         var query = _db.SaleItems
-            .Include(si => si.Medicine)
-                .ThenInclude(m => m.Category)
-            .Include(si => si.Medicine)
-                .ThenInclude(m => m.Manufacturer)
-            .Include(si => si.Sale)
             .Where(si => si.Sale.SaleDate >= fromDate && si.Sale.SaleDate < toDate)
             .AsQueryable();
 
-        // Filter by manufacturer
         if (manufacturerId.HasValue)
             query = query.Where(si => si.Medicine.ManufacturerId == manufacturerId.Value);
 
-        // Filter by supplier — a medicine was supplied by a supplier if any of its batches came from that supplier
         if (supplierId.HasValue)
             query = query.Where(si =>
                 _db.MedicineBatches.Any(b =>
@@ -150,7 +144,6 @@ public class ReportRepository : IReportRepository
             })
             .ToListAsync();
 
-        // Attach supplier name per medicine (from most recent batch of that supplier)
         if (supplierId.HasValue)
         {
             var supplierName = await _db.Suppliers
@@ -160,11 +153,10 @@ public class ReportRepository : IReportRepository
             grouped.ForEach(i => i.SupplierName = supplierName);
         }
 
-        // Sort
         grouped = sortBy?.ToLower() switch
         {
             "revenue" => grouped.OrderByDescending(i => i.TotalRevenue).ToList(),
-            _         => grouped.OrderByDescending(i => i.TotalQuantitySold).ToList(), // default: quantity
+            _         => grouped.OrderByDescending(i => i.TotalQuantitySold).ToList(),
         };
 
         return new StockConsumptionReportDto

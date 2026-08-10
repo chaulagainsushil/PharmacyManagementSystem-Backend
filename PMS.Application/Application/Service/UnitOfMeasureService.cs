@@ -1,5 +1,6 @@
 using PMS.Application.Application.Interface.Repository;
 using PMS.Application.Application.Interface.Service;
+using PMS.Common;
 using PMS.Common.DTOs.Uom;
 using PMS.Models.Models;
 
@@ -39,21 +40,33 @@ public class UnitOfMeasureService : IUnitOfMeasureService
         return (true, "Unit of measure created.", Map(created));
     }
 
-    public async Task<(bool Success, string Message, UomDto? Data)> UpdateAsync(int id, UpdateUomDto dto)
+    public async Task<(bool Success, string Message, bool IsConflict, UomDto? Data)> UpdateAsync(
+        int id, UpdateUomDto dto)
     {
-        var uom = await _repo.GetByIdAsync(id);
-        if (uom is null)
-            return (false, $"Unit of measure with ID {id} not found.", null);
+        // 1. Read current entity (UoM repo returns entity directly — AsNoTracking)
+        var existing = await _repo.GetByIdAsync(id);
+        if (existing is null)
+            return (false, $"Unit of measure with ID {id} not found.", false, null);
 
+        // 2. Optimistic concurrency check
+        if (!ConcurrencyHelper.Matches(existing.UpdatedAt, dto.UpdatedAt))
+            return (false, "The record was modified by another user. Please refresh and try again.", true, null);
+
+        // 3. Business rule: duplicate name
         if (await _repo.ExistsByNameAsync(dto.Name, excludeId: id))
-            return (false, $"A unit of measure named '{dto.Name}' already exists.", null);
+            return (false, $"A unit of measure named '{dto.Name}' already exists.", false, null);
 
-        uom.Name     = dto.Name.Trim();
-        uom.Symbol   = dto.Symbol.Trim();
-        uom.IsActive = dto.IsActive;
+        // 4. Build a new entity instance for update (since GetByIdAsync returns AsNoTracking)
+        var entity = new UnitOfMeasure
+        {
+            UnitOfMeasureId = id,
+            Name            = dto.Name.Trim(),
+            Symbol          = dto.Symbol.Trim(),
+            IsActive        = dto.IsActive
+        };
 
-        var updated = await _repo.UpdateAsync(uom);
-        return (true, "Unit of measure updated.", Map(updated));
+        var updated = await _repo.UpdateAsync(entity);
+        return (true, "Unit of measure updated.", false, Map(updated));
     }
 
     public async Task<(bool Success, string Message)> DeleteAsync(int id)
@@ -75,6 +88,7 @@ public class UnitOfMeasureService : IUnitOfMeasureService
         UnitOfMeasureId = u.UnitOfMeasureId,
         Name            = u.Name,
         Symbol          = u.Symbol,
-        IsActive        = u.IsActive
+        IsActive        = u.IsActive,
+        UpdatedAt       = u.UpdatedAt
     };
 }

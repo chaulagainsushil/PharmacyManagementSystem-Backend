@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using PMS.Application.Application.Interface.Repository;
+using PMS.Common.DTOs.Sale;
 using PMS.Models.Models;
 using PMS.Repository.Data;
 
@@ -21,14 +22,47 @@ public class SaleRepository : ISaleRepository
     public async Task<Medicine?> GetMedicineWithUnitsAndFefoStockAsync(int medicineId) =>
         await _db.Medicines
             .Where(m => m.MedicineId == medicineId && m.IsActive)
-            // Load active MedicineUnits with their UoM master so the service can
-            // call Medicine.ConvertToBaseQuantity and Medicine.GetUnitPrice.
-            .Include(m => m.Units.Where(u => u.IsActive))
-                .ThenInclude(u => u.UnitOfMeasure)
-            // FEFO batches: non-expired, in-stock, sorted earliest expiry first
-            .Include(m => m.Batches
-                .Where(b => b.ExpiryDate.Date > DateTime.UtcNow.Date && b.QuantityInTablets > 0)
-                .OrderBy(b => b.ExpiryDate))
+            .Select(m => new Medicine
+            {
+                MedicineId      = m.MedicineId,
+                Name            = m.Name,
+                TabletsPerStrip = m.TabletsPerStrip,
+                StrapsPerBox    = m.StrapsPerBox,
+                IsActive        = m.IsActive,
+                Units = m.Units
+                    .Where(u => u.IsActive)
+                    .Select(u => new MedicineUnit
+                    {
+                        MedicineUnitId         = u.MedicineUnitId,
+                        MedicineId             = u.MedicineId,
+                        UnitOfMeasureId        = u.UnitOfMeasureId,
+                        ConversionFactorToBase = u.ConversionFactorToBase,
+                        IsBaseUnit             = u.IsBaseUnit,
+                        IsDefault              = u.IsDefault,
+                        IsActive               = u.IsActive,
+                        UnitPrice              = u.UnitPrice,
+                        UnitOfMeasure = new UnitOfMeasure
+                        {
+                            UnitOfMeasureId = u.UnitOfMeasure.UnitOfMeasureId,
+                            Name            = u.UnitOfMeasure.Name,
+                            Symbol          = u.UnitOfMeasure.Symbol
+                        }
+                    })
+                    .ToList(),
+                Batches = m.Batches
+                    .Where(b => b.ExpiryDate.Date > DateTime.UtcNow.Date && b.QuantityInTablets > 0)
+                    .OrderBy(b => b.ExpiryDate)
+                    .Select(b => new MedicineBatch
+                    {
+                        BatchId                = b.BatchId,
+                        MedicineId             = b.MedicineId,
+                        BatchNumber            = b.BatchNumber,
+                        ExpiryDate             = b.ExpiryDate,
+                        QuantityInTablets      = b.QuantityInTablets,
+                        PurchasePricePerTablet = b.PurchasePricePerTablet
+                    })
+                    .ToList()
+            })
             .FirstOrDefaultAsync();
 
     /// <inheritdoc/>
@@ -57,6 +91,12 @@ public class SaleRepository : ISaleRepository
                         $"Batch {batchId} disappeared during transaction.");
 
                 batch.QuantityInTablets -= baseUnitsToDeduct;
+
+                if (batch.QuantityInTablets < 0)
+                    throw new InvalidOperationException(
+                        $"Insufficient stock in batch {batch.BatchNumber} (ID {batchId}). " +
+                        "The sale cannot be completed because stock would go negative. " +
+                        "This may be caused by a concurrent request.");
             }
 
             // 2. Insert the Sale (SaleItems already in navigation property)
@@ -78,34 +118,85 @@ public class SaleRepository : ISaleRepository
     // ── Read-back for response DTO ─────────────────────────────────────────────
 
     /// <inheritdoc/>
-    public async Task<Sale?> GetSaleWithDetailsAsync(int saleId) =>
+    public async Task<SaleResponseDto?> GetSaleWithDetailsAsync(int saleId) =>
         await _db.Sales
-            .Include(s => s.Customer)
-            .Include(s => s.Pharmacist)
-            .Include(s => s.SaleItems)
-                .ThenInclude(si => si.Medicine)
-            .Include(s => s.SaleItems)
-                .ThenInclude(si => si.Batch)
-            .Include(s => s.SaleItems)
-                .ThenInclude(si => si.MedicineUnit)
-                    .ThenInclude(mu => mu.UnitOfMeasure)
+            .Where(s => s.SaleId == saleId)
             .AsNoTracking()
-            .FirstOrDefaultAsync(s => s.SaleId == saleId);
+            .Select(s => new SaleResponseDto
+            {
+                SaleId          = s.SaleId,
+                InvoiceNumber   = s.InvoiceNumber,
+                CustomerId      = s.CustomerId,
+                CustomerName    = s.Customer.FullName,
+                PharmacistId    = s.PharmacistId,
+                PharmacistName  = s.Pharmacist.FullName,
+                SaleDate        = s.SaleDate,
+                PaymentMode     = s.PaymentMode,
+                Subtotal        = s.Subtotal,
+                DiscountPercent = s.DiscountPercent,
+                DiscountAmount  = s.DiscountAmount,
+                TotalAmount     = s.TotalAmount,
+                UpdatedAt       = s.UpdatedAt,
+                Items = s.SaleItems
+                    .Select(si => new SaleItemResponseDto
+                    {
+                        SaleItemId           = si.SaleItemId,
+                        MedicineId           = si.MedicineId,
+                        MedicineName         = si.Medicine.Name,
+                        BatchId              = si.BatchId,
+                        BatchNumber          = si.Batch.BatchNumber,
+                        MedicineUnitId       = si.MedicineUnitId,
+                        UomName              = si.MedicineUnit.UnitOfMeasure.Name,
+                        Quantity             = si.Quantity,
+                        BaseQuantityDeducted = si.BaseQuantityDeducted,
+                        UnitPrice            = si.UnitPrice,
+                        DiscountPercent      = si.DiscountPercent,
+                        DiscountAmount       = si.DiscountAmount,
+                        LineTotal            = si.LineTotal
+                    })
+                    .ToList()
+            })
+            .FirstOrDefaultAsync();
 
     /// <inheritdoc/>
-    public async Task<IReadOnlyList<Sale>> GetAllSalesAsync() =>
+    public async Task<IReadOnlyList<SaleResponseDto>> GetAllSalesAsync() =>
         await _db.Sales
-            .Include(s => s.Customer)
-            .Include(s => s.Pharmacist)
-            .Include(s => s.SaleItems)
-                .ThenInclude(si => si.Medicine)
-            .Include(s => s.SaleItems)
-                .ThenInclude(si => si.Batch)
-            .Include(s => s.SaleItems)
-                .ThenInclude(si => si.MedicineUnit)
-                    .ThenInclude(mu => mu.UnitOfMeasure)
             .AsNoTracking()
             .OrderByDescending(s => s.SaleDate)
+            .Select(s => new SaleResponseDto
+            {
+                SaleId          = s.SaleId,
+                InvoiceNumber   = s.InvoiceNumber,
+                CustomerId      = s.CustomerId,
+                CustomerName    = s.Customer.FullName,
+                PharmacistId    = s.PharmacistId,
+                PharmacistName  = s.Pharmacist.FullName,
+                SaleDate        = s.SaleDate,
+                PaymentMode     = s.PaymentMode,
+                Subtotal        = s.Subtotal,
+                DiscountPercent = s.DiscountPercent,
+                DiscountAmount  = s.DiscountAmount,
+                TotalAmount     = s.TotalAmount,
+                UpdatedAt       = s.UpdatedAt,
+                Items = s.SaleItems
+                    .Select(si => new SaleItemResponseDto
+                    {
+                        SaleItemId           = si.SaleItemId,
+                        MedicineId           = si.MedicineId,
+                        MedicineName         = si.Medicine.Name,
+                        BatchId              = si.BatchId,
+                        BatchNumber          = si.Batch.BatchNumber,
+                        MedicineUnitId       = si.MedicineUnitId,
+                        UomName              = si.MedicineUnit.UnitOfMeasure.Name,
+                        Quantity             = si.Quantity,
+                        BaseQuantityDeducted = si.BaseQuantityDeducted,
+                        UnitPrice            = si.UnitPrice,
+                        DiscountPercent      = si.DiscountPercent,
+                        DiscountAmount       = si.DiscountAmount,
+                        LineTotal            = si.LineTotal
+                    })
+                    .ToList()
+            })
             .ToListAsync();
 
     // ── Invoice number generation ──────────────────────────────────────────────

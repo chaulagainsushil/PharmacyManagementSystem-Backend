@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using PMS.Application.Application.Interface.Repository;
+using PMS.Common.DTOs.Category;
 using PMS.Models.Models;
 using PMS.Repository.Data;
 
@@ -14,21 +15,39 @@ public class CategoryRepository : ICategoryRepository
         _db = db;
     }
 
-    public async Task<IEnumerable<Category>> GetAllAsync()
+    public async Task<IEnumerable<CategoryListItemDto>> GetAllAsync()
     {
         return await _db.Categories
-            .Include(c => c.Medicines)
             .AsNoTracking()
             .OrderBy(c => c.CategoryName)
+            .Select(c => new CategoryListItemDto
+            {
+                CategoryId    = c.CategoryId,
+                CategoryName  = c.CategoryName,
+                MedicineCount = c.Medicines.Count(),
+                UpdatedAt     = c.UpdatedAt
+            })
             .ToListAsync();
     }
 
-    public async Task<Category?> GetByIdAsync(int id)
+    public async Task<CategoryResponseDto?> GetByIdAsync(int id)
     {
         return await _db.Categories
-            .Include(c => c.Medicines)
             .AsNoTracking()
-            .FirstOrDefaultAsync(c => c.CategoryId == id);
+            .Where(c => c.CategoryId == id)
+            .Select(c => new CategoryResponseDto
+            {
+                CategoryId    = c.CategoryId,
+                CategoryName  = c.CategoryName,
+                MedicineCount = c.Medicines.Count(),
+                UpdatedAt     = c.UpdatedAt
+            })
+            .FirstOrDefaultAsync();
+    }
+
+    public async Task<Category?> GetEntityByIdAsync(int id)
+    {
+        return await _db.Categories.FindAsync(id);
     }
 
     public async Task<bool> ExistsByNameAsync(string name, int? excludeId = null)

@@ -1,5 +1,6 @@
 using PMS.Application.Application.Interface.Repository;
 using PMS.Application.Application.Interface.Service;
+using PMS.Common;
 using PMS.Common.DTOs.Category;
 using PMS.Models.Models;
 
@@ -16,21 +17,12 @@ public class CategoryService : ICategoryService
 
     public async Task<IEnumerable<CategoryListItemDto>> GetAllAsync()
     {
-        var categories = await _repo.GetAllAsync();
-        return categories.Select(c => new CategoryListItemDto
-        {
-            CategoryId    = c.CategoryId,
-            CategoryName  = c.CategoryName,
-            MedicineCount = c.Medicines.Count
-        });
+        return await _repo.GetAllAsync();
     }
 
     public async Task<CategoryResponseDto?> GetByIdAsync(int id)
     {
-        var category = await _repo.GetByIdAsync(id);
-        if (category is null) return null;
-
-        return MapToResponse(category);
+        return await _repo.GetByIdAsync(id);
     }
 
     public async Task<(bool Success, string Message, CategoryResponseDto? Data)> CreateAsync(
@@ -42,23 +34,36 @@ public class CategoryService : ICategoryService
         var category = new Category { CategoryName = dto.CategoryName.Trim() };
         var created  = await _repo.CreateAsync(category);
 
-        return (true, "Category created successfully.", MapToResponse(created));
+        var response = await _repo.GetByIdAsync(created.CategoryId);
+        return (true, "Category created successfully.", response);
     }
 
-    public async Task<(bool Success, string Message, CategoryResponseDto? Data)> UpdateAsync(
+    public async Task<(bool Success, string Message, bool IsConflict, CategoryResponseDto? Data)> UpdateAsync(
         int id, UpdateCategoryDto dto)
     {
-        var category = await _repo.GetByIdAsync(id);
-        if (category is null)
-            return (false, $"Category with ID {id} not found.", null);
+        // 1. Read current DTO (includes UpdatedAt)
+        var existing = await _repo.GetByIdAsync(id);
+        if (existing is null)
+            return (false, $"Category with ID {id} not found.", false, null);
 
+        // 2. Optimistic concurrency check
+        if (!ConcurrencyHelper.Matches(existing.UpdatedAt, dto.UpdatedAt))
+            return (false, "The record was modified by another user. Please refresh and try again.", true, null);
+
+        // 3. Business rule: duplicate name
         if (await _repo.ExistsByNameAsync(dto.CategoryName, excludeId: id))
-            return (false, $"Category '{dto.CategoryName}' already exists.", null);
+            return (false, $"Category '{dto.CategoryName}' already exists.", false, null);
 
-        category.CategoryName = dto.CategoryName.Trim();
-        var updated = await _repo.UpdateAsync(category);
+        // 4. Fetch tracked entity and mutate
+        var entity = await _repo.GetEntityByIdAsync(id);
+        if (entity is null)
+            return (false, $"Category with ID {id} not found.", false, null);
 
-        return (true, "Category updated successfully.", MapToResponse(updated));
+        entity.CategoryName = dto.CategoryName.Trim();
+        await _repo.UpdateAsync(entity);
+
+        var updated = await _repo.GetByIdAsync(id);
+        return (true, "Category updated successfully.", false, updated);
     }
 
     public async Task<(bool Success, string Message)> DeleteAsync(int id)
@@ -73,12 +78,4 @@ public class CategoryService : ICategoryService
         await _repo.DeleteAsync(id);
         return (true, "Category deleted successfully.");
     }
-
-    // ── Mapping helper ─────────────────────────────────────────────────────────
-    private static CategoryResponseDto MapToResponse(Category c) => new()
-    {
-        CategoryId    = c.CategoryId,
-        CategoryName  = c.CategoryName,
-        MedicineCount = c.Medicines?.Count ?? 0
-    };
 }

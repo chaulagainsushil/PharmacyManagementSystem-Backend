@@ -61,13 +61,17 @@ public class MedicineUnitController : ControllerBase
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> SetDefault([FromBody] SetDefaultUnitCommand cmd)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        var (success, message) = await _service.SetDefaultUnitAsync(cmd);
+        var (success, message, isConflict) = await _service.SetDefaultUnitAsync(cmd);
         if (!success)
+        {
+            if (isConflict) return Conflict(new { message });
             return message.Contains("not found") ? NotFound(new { message }) : BadRequest(new { message });
+        }
 
         return Ok(new { message });
     }
@@ -78,13 +82,17 @@ public class MedicineUnitController : ControllerBase
     [ProducesResponseType(typeof(MedicineUnitDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> UpdatePrice(int medicineUnitId, [FromBody] UpdateMedicineUnitPriceCommand cmd)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        var (success, message, data) = await _service.UpdatePriceAsync(medicineUnitId, cmd);
+        var (success, message, isConflict, data) = await _service.UpdatePriceAsync(medicineUnitId, cmd);
         if (!success)
+        {
+            if (isConflict) return Conflict(new { message });
             return message.Contains("not found") ? NotFound(new { message }) : BadRequest(new { message });
+        }
 
         return Ok(data);
     }

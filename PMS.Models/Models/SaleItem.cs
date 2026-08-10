@@ -1,8 +1,12 @@
 namespace PMS.Models.Models;
 
-public class SaleItem
+public class SaleItem : IHasTenant
 {
     public int SaleItemId { get; set; }
+
+    /// <inheritdoc/>
+    public Guid TenantId { get; set; }
+
     public int SaleId { get; set; }
     public int MedicineId { get; set; }
     public int BatchId { get; set; }
@@ -26,6 +30,7 @@ public class SaleItem
     public decimal DiscountPercent { get; set; }
     public decimal DiscountAmount { get; set; }
     public decimal LineTotal { get; set; }
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     // Navigation
     public Sale Sale { get; set; } = null!;

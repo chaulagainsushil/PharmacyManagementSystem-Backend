@@ -15,4 +15,10 @@ public class AuthResponseDto
 
     /// <summary>Integer PK from the AppUsers table — used as PharmacistId when creating sales.</summary>
     public int? UserId { get; set; }
+
+    /// <summary>
+    /// The tenant (pharmacy) this user belongs to.
+    /// Populated on login/signup — embedded in the JWT as the "tenantId" claim.
+    /// </summary>
+    public Guid? TenantId { get; set; }
 }

@@ -11,5 +11,6 @@ public class MedicineBatchListItemDto
     public DateTime ExpiryDate { get; set; }
     public int QuantityInTablets { get; set; }
     public decimal PurchasePricePerTablet { get; set; }
+    public DateTime UpdatedAt { get; set; }
     public bool IsExpired { get; set; }
 }

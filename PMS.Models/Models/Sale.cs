@@ -2,9 +2,13 @@ using PMS.Models.Enums;
 
 namespace PMS.Models.Models;
 
-public class Sale
+public class Sale : IHasTenant
 {
     public int SaleId { get; set; }
+
+    /// <inheritdoc/>
+    public Guid TenantId { get; set; }
+
     public string InvoiceNumber { get; set; } = string.Empty;
 
     public int CustomerId { get; set; }
@@ -18,6 +22,7 @@ public class Sale
 
     public PaymentMode PaymentMode { get; set; } = PaymentMode.Cash;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     public Customer Customer { get; set; } = null!;
     public User Pharmacist { get; set; } = null!;

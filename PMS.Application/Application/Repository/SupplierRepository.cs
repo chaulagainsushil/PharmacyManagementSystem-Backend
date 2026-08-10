@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using PMS.Application.Application.Interface.Repository;
+using PMS.Common.DTOs.Supplier;
 using PMS.Models.Models;
 using PMS.Repository.Data;
 
@@ -11,18 +12,38 @@ public class SupplierRepository : ISupplierRepository
 
     public SupplierRepository(ApplicationDbContext db) => _db = db;
 
-    public async Task<IEnumerable<Supplier>> GetAllAsync() =>
+    public async Task<IEnumerable<SupplierListItemDto>> GetAllAsync() =>
         await _db.Suppliers
-            .Include(s => s.Batches)
             .AsNoTracking()
             .OrderBy(s => s.Name)
+            .Select(s => new SupplierListItemDto
+            {
+                SupplierId  = s.SupplierId,
+                Name        = s.Name,
+                Phone       = s.Phone,
+                Address     = s.Address,
+                BatchCount  = s.Batches.Count(),
+                UpdatedAt   = s.UpdatedAt
+            })
             .ToListAsync();
 
-    public async Task<Supplier?> GetByIdAsync(int id) =>
+    public async Task<SupplierResponseDto?> GetByIdAsync(int id) =>
         await _db.Suppliers
-            .Include(s => s.Batches)
             .AsNoTracking()
-            .FirstOrDefaultAsync(s => s.SupplierId == id);
+            .Where(s => s.SupplierId == id)
+            .Select(s => new SupplierResponseDto
+            {
+                SupplierId  = s.SupplierId,
+                Name        = s.Name,
+                Phone       = s.Phone,
+                Address     = s.Address,
+                BatchCount  = s.Batches.Count(),
+                UpdatedAt   = s.UpdatedAt
+            })
+            .FirstOrDefaultAsync();
+
+    public async Task<Supplier?> GetEntityByIdAsync(int id) =>
+        await _db.Suppliers.FindAsync(id);
 
     public async Task<bool> ExistsByNameAsync(string name, int? excludeId = null) =>
         await _db.Suppliers

@@ -20,4 +20,6 @@ public class UpdateMedicineBatchDto
 
     [Range(0, double.MaxValue, ErrorMessage = "Purchase price must be non-negative.")]
     public decimal PurchasePricePerTablet { get; set; }
+
+    public DateTime UpdatedAt { get; set; }
 }

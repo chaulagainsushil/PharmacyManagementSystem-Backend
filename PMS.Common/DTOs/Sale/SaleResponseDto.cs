@@ -19,6 +19,7 @@ public class SaleResponseDto
     public decimal DiscountPercent { get; set; }
     public decimal DiscountAmount { get; set; }
     public decimal TotalAmount { get; set; }
+    public DateTime UpdatedAt { get; set; }
 
     public List<SaleItemResponseDto> Items { get; set; } = new();
 }

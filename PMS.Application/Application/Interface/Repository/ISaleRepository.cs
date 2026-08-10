@@ -1,3 +1,4 @@
+using PMS.Common.DTOs.Sale;
 using PMS.Models.Models;
 
 namespace PMS.Application.Application.Interface.Repository;
@@ -25,14 +26,14 @@ public interface ISaleRepository
     Task<Sale> SaveSaleAsync(Sale sale, IReadOnlyList<(int BatchId, int BaseUnitsToDeduct)> batchDeductions);
 
     /// <summary>
-    /// Reload a sale with all navigation properties needed for the response DTO.
+    /// Reload a sale with all fields projected directly to a response DTO.
     /// </summary>
-    Task<Sale?> GetSaleWithDetailsAsync(int saleId);
+    Task<SaleResponseDto?> GetSaleWithDetailsAsync(int saleId);
 
     /// <summary>
-    /// Return all sales with navigation properties, ordered newest first.
+    /// Return all sales projected to response DTOs, ordered newest first.
     /// </summary>
-    Task<IReadOnlyList<Sale>> GetAllSalesAsync();
+    Task<IReadOnlyList<SaleResponseDto>> GetAllSalesAsync();
 
     /// <summary>
     /// Generate a unique, sequential invoice number (e.g. INV-20260730-0001).

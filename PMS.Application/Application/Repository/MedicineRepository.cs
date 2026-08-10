@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using PMS.Application.Application.Interface.Repository;
+using PMS.Common.DTOs.Medicine;
+using PMS.Common.DTOs.Uom;
 using PMS.Models.Models;
 using PMS.Repository.Data;
 
@@ -14,24 +16,34 @@ public class MedicineRepository : IMedicineRepository
         _db = db;
     }
 
-    public async Task<IEnumerable<Medicine>> GetAllAsync()
+    public async Task<IEnumerable<MedicineListItemDto>> GetAllAsync()
     {
         return await _db.Medicines
-            .Include(m => m.Category)
-            .Include(m => m.Manufacturer)
-            .Include(m => m.Batches)
             .AsNoTracking()
             .OrderBy(m => m.Name)
+            .Select(m => new MedicineListItemDto
+            {
+                MedicineId           = m.MedicineId,
+                Name                 = m.Name,
+                GenericName          = m.GenericName,
+                CategoryName         = m.Category != null ? m.Category.CategoryName : null,
+                ManufacturerName     = m.Manufacturer != null ? m.Manufacturer.Name : null,
+                TabletsPerStrip      = m.TabletsPerStrip,
+                StrapsPerBox         = m.StrapsPerBox,
+                TotalTabletsPerBox   = m.TabletsPerStrip * m.StrapsPerBox,
+                StripPrice           = m.StripPrice,
+                TabletPrice          = m.TabletPrice,
+                TotalStockInTablets  = m.Batches.Sum(b => b.QuantityInTablets),
+                IsActive             = m.IsActive,
+                RequiresPrescription = m.RequiresPrescription
+            })
             .ToListAsync();
     }
 
-    public async Task<IEnumerable<Medicine>> SearchAsync(string query)
+    public async Task<IEnumerable<MedicineListItemDto>> SearchAsync(string query)
     {
         var q = query.Trim().ToLower();
         return await _db.Medicines
-            .Include(m => m.Category)
-            .Include(m => m.Manufacturer)
-            .Include(m => m.Batches)
             .AsNoTracking()
             .Where(m =>
                 m.Name.ToLower().Contains(q) ||
@@ -39,19 +51,75 @@ public class MedicineRepository : IMedicineRepository
                 (m.Category != null && m.Category.CategoryName.ToLower().Contains(q)) ||
                 (m.Manufacturer != null && m.Manufacturer.Name.ToLower().Contains(q)))
             .OrderBy(m => m.Name)
+            .Select(m => new MedicineListItemDto
+            {
+                MedicineId           = m.MedicineId,
+                Name                 = m.Name,
+                GenericName          = m.GenericName,
+                CategoryName         = m.Category != null ? m.Category.CategoryName : null,
+                ManufacturerName     = m.Manufacturer != null ? m.Manufacturer.Name : null,
+                TabletsPerStrip      = m.TabletsPerStrip,
+                StrapsPerBox         = m.StrapsPerBox,
+                TotalTabletsPerBox   = m.TabletsPerStrip * m.StrapsPerBox,
+                StripPrice           = m.StripPrice,
+                TabletPrice          = m.TabletPrice,
+                TotalStockInTablets  = m.Batches.Sum(b => b.QuantityInTablets),
+                IsActive             = m.IsActive,
+                RequiresPrescription = m.RequiresPrescription
+            })
             .ToListAsync();
     }
 
-    public async Task<Medicine?> GetByIdAsync(int id)
+    public async Task<MedicineResponseDto?> GetByIdAsync(int id)
     {
         return await _db.Medicines
-            .Include(m => m.Category)
-            .Include(m => m.Manufacturer)
-            .Include(m => m.Batches)
-            .Include(m => m.Units.OrderByDescending(u => u.IsDefault).ThenBy(u => u.UnitOfMeasure.Name))
-                .ThenInclude(u => u.UnitOfMeasure)
             .AsNoTracking()
-            .FirstOrDefaultAsync(m => m.MedicineId == id);
+            .Where(m => m.MedicineId == id)
+            .Select(m => new MedicineResponseDto
+            {
+                MedicineId           = m.MedicineId,
+                Name                 = m.Name,
+                GenericName          = m.GenericName,
+                CategoryId           = m.CategoryId,
+                CategoryName         = m.Category != null ? m.Category.CategoryName : null,
+                ManufacturerId       = m.ManufacturerId,
+                ManufacturerName     = m.Manufacturer != null ? m.Manufacturer.Name : null,
+                TabletsPerStrip      = m.TabletsPerStrip,
+                StrapsPerBox         = m.StrapsPerBox,
+                TotalTabletsPerBox   = m.TabletsPerStrip * m.StrapsPerBox,
+                StripPrice           = m.StripPrice,
+                TabletPrice          = m.TabletPrice,
+                ReorderLevel         = m.ReorderLevel,
+                RequiresPrescription = m.RequiresPrescription,
+                IsActive             = m.IsActive,
+                TotalStockInTablets  = m.Batches.Sum(b => b.QuantityInTablets),
+                CreatedAt            = m.CreatedAt,
+                UpdatedAt            = m.UpdatedAt,
+                Units = m.Units
+                    .OrderByDescending(u => u.IsDefault)
+                    .ThenBy(u => u.UnitOfMeasure.Name)
+                    .Select(u => new MedicineUnitDto
+                    {
+                        MedicineUnitId         = u.MedicineUnitId,
+                        MedicineId             = u.MedicineId,
+                        UnitOfMeasureId        = u.UnitOfMeasureId,
+                        UomName                = u.UnitOfMeasure.Name,
+                        UomSymbol              = u.UnitOfMeasure.Symbol,
+                        ConversionFactorToBase = u.ConversionFactorToBase,
+                        IsBaseUnit             = u.IsBaseUnit,
+                        IsDefault              = u.IsDefault,
+                        IsActive               = u.IsActive,
+                        UnitPrice              = u.UnitPrice,
+                        UpdatedAt              = u.UpdatedAt
+                    })
+                    .ToList()
+            })
+            .FirstOrDefaultAsync();
+    }
+
+    public async Task<Medicine?> GetEntityByIdAsync(int id)
+    {
+        return await _db.Medicines.FindAsync(id);
     }
 
     public async Task<bool> ExistsByNameAsync(string name, int? excludeId = null)
@@ -98,14 +166,11 @@ public class MedicineRepository : IMedicineRepository
         await using var transaction = await _db.Database.BeginTransactionAsync();
         try
         {
-            // Remove all existing units for this medicine
             var existing = await _db.MedicineUnits
                 .Where(mu => mu.MedicineId == medicineId)
                 .ToListAsync();
 
             _db.MedicineUnits.RemoveRange(existing);
-
-            // Insert the new units
             _db.MedicineUnits.AddRange(newUnits);
 
             await _db.SaveChangesAsync();

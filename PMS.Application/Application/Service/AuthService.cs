@@ -13,16 +13,67 @@ namespace PMS.Application.Application.Service;
 
 public class AuthService : IAuthService
 {
-    private readonly IAuthRepository _authRepository;
-    private readonly IConfiguration  _configuration;
+    private readonly IAuthRepository      _authRepository;
+    private readonly ISubscriptionService _subscriptionService;
+    private readonly IConfiguration       _configuration;
 
-    public AuthService(IAuthRepository authRepository, IConfiguration configuration)
+    public AuthService(
+        IAuthRepository      authRepository,
+        ISubscriptionService subscriptionService,
+        IConfiguration       configuration)
     {
-        _authRepository = authRepository;
-        _configuration  = configuration;
+        _authRepository      = authRepository;
+        _subscriptionService = subscriptionService;
+        _configuration       = configuration;
     }
 
-    // ── Signup (self-registration) ────────────────────────────────────────────
+    // ── Tenant Signup (creates Tenant + Subscription + User in one flow) ──────
+
+    public async Task<AuthResponseDto> TenantSignupAsync(SignupDto dto)
+    {
+        if (string.IsNullOrWhiteSpace(dto.PharmacyName))
+        {
+            return new AuthResponseDto
+            {
+                IsSuccess = false,
+                Message   = "PharmacyName is required for tenant signup."
+            };
+        }
+
+        // Step 1 – Create the PharmacyProfile (tenant root)
+        var profile = await _authRepository.CreatePharmacyProfileAsync(dto.PharmacyName);
+
+        // Step 2 – Register the Identity user
+        var registerResult = await _authRepository.RegisterAsync(dto);
+        if (!registerResult.Succeeded)
+        {
+            return new AuthResponseDto
+            {
+                IsSuccess = false,
+                Message   = string.Join("; ", registerResult.Errors.Select(e => e.Description))
+            };
+        }
+
+        var identityUser = await _authRepository.FindByEmailAsync(dto.Email);
+        if (identityUser is null)
+        {
+            return new AuthResponseDto { IsSuccess = false, Message = "User registration failed." };
+        }
+
+        // Step 3 – Assign PharmacyAdmin role (first user of a tenant is always the admin)
+        await _authRepository.AssignRoleAsync(identityUser, AppRoles.PharmacyAdmin);
+
+        // Step 4 – Link the user to the tenant via a persistent claim
+        await _authRepository.AddTenantClaimAsync(identityUser, profile.TenantId);
+
+        // Step 5 – Create the initial subscription
+        await _subscriptionService.CreateInitialAsync(profile.TenantId, dto.InitialPlan);
+
+        // Step 6 – Auto-login (this also creates the AppUser record)
+        return await LoginAsync(new LoginDto { Email = dto.Email, Password = dto.Password });
+    }
+
+    // ── Signup (add user to an existing tenant) ───────────────────────────────
 
     public async Task<AuthResponseDto> SignupAsync(SignupDto dto)
     {
@@ -54,7 +105,6 @@ public class AuthService : IAuthService
 
     public async Task<AuthResponseDto> CreateUserAsync(SignupDto dto)
     {
-        // Validate that the requested role is known
         var role = dto.Role is not null && AppRoles.All.Contains(dto.Role)
             ? dto.Role
             : AppRoles.Pharmacist;
@@ -152,10 +202,14 @@ public class AuthService : IAuthService
         var roles    = await _authRepository.GetUserRolesAsync(user);
         var fullName = await _authRepository.GetFullNameAsync(user);
 
+        // Resolve the tenant associated with this user
+        var profile  = await _authRepository.GetPharmacyProfileByUserEmailAsync(dto.Email);
+        var tenantId = profile?.TenantId ?? Guid.Empty;
+
         // Ensure the AppUser (integer-PK) record exists for PharmacistId use in sales
         var appUser = await _authRepository.GetOrCreateAppUserAsync(user, fullName);
 
-        var (token, expiration) = GenerateJwtToken(user, roles, fullName);
+        var (token, expiration) = GenerateJwtToken(user, roles, fullName, tenantId);
 
         return new AuthResponseDto
         {
@@ -166,14 +220,105 @@ public class AuthService : IAuthService
             Email      = user.Email,
             FullName   = fullName,
             Roles      = roles,
-            UserId     = appUser.UserId
+            UserId     = appUser.UserId,
+            TenantId   = tenantId == Guid.Empty ? null : tenantId
         };
+    }
+
+    // ── Change Password ───────────────────────────────────────────────────────
+
+    public async Task<AuthResponseDto> ChangePasswordAsync(string userId, ChangePasswordDto dto)
+    {
+        var user = await _authRepository.FindByEmailAsync(userId)
+                   ?? await FindByIdInternalAsync(userId);
+
+        if (user is null)
+        {
+            return new AuthResponseDto
+            {
+                IsSuccess = false,
+                Message   = "User not found."
+            };
+        }
+
+        var result = await _authRepository.ChangePasswordAsync(
+            user, dto.CurrentPassword, dto.NewPassword);
+
+        return result.Succeeded
+            ? new AuthResponseDto
+            {
+                IsSuccess = true,
+                Message   = "Password changed successfully.",
+                Email     = user.Email
+            }
+            : new AuthResponseDto
+            {
+                IsSuccess = false,
+                Message   = string.Join("; ", result.Errors.Select(e => e.Description))
+            };
+    }
+
+    // ── Forgot Password ───────────────────────────────────────────────────────
+
+    public async Task<AuthResponseDto> ForgotPasswordAsync(ForgotPasswordDto dto)
+    {
+        var user = await _authRepository.FindByEmailAsync(dto.Email);
+
+        if (user is null)
+        {
+            return new AuthResponseDto
+            {
+                IsSuccess = true,
+                Message   = "If that email address is registered, a reset link has been sent."
+            };
+        }
+
+        var token = await _authRepository.GeneratePasswordResetTokenAsync(user);
+
+        return new AuthResponseDto
+        {
+            IsSuccess = true,
+            Message   = "Password reset token generated. In production, this would be emailed to you.",
+            Token     = token,
+            Email     = user.Email
+        };
+    }
+
+    // ── Reset Password ────────────────────────────────────────────────────────
+
+    public async Task<AuthResponseDto> ResetPasswordAsync(ResetPasswordDto dto)
+    {
+        var user = await _authRepository.FindByEmailAsync(dto.Email);
+
+        if (user is null)
+        {
+            return new AuthResponseDto
+            {
+                IsSuccess = false,
+                Message   = "Password reset failed. The token may be invalid or expired."
+            };
+        }
+
+        var result = await _authRepository.ResetPasswordAsync(user, dto.Token, dto.NewPassword);
+
+        return result.Succeeded
+            ? new AuthResponseDto
+            {
+                IsSuccess = true,
+                Message   = "Password has been reset successfully. You can now log in.",
+                Email     = user.Email
+            }
+            : new AuthResponseDto
+            {
+                IsSuccess = false,
+                Message   = string.Join("; ", result.Errors.Select(e => e.Description))
+            };
     }
 
     // ── JWT helpers ───────────────────────────────────────────────────────────
 
     private (string Token, DateTime Expiration) GenerateJwtToken(
-        IdentityUser user, IList<string> roles, string fullName)
+        IdentityUser user, IList<string> roles, string fullName, Guid tenantId)
     {
         var jwtSettings = _configuration.GetSection("JwtSettings");
         var secretKey   = jwtSettings["SecretKey"]
@@ -191,6 +336,10 @@ public class AuthService : IAuthService
             new("FullName",                    fullName)
         };
 
+        // Embed tenantId so every request knows which tenant the user belongs to
+        if (tenantId != Guid.Empty)
+            claims.Add(new Claim("tenantId", tenantId.ToString()));
+
         // Add each role as a claim
         claims.AddRange(roles.Select(role => new Claim(ClaimTypes.Role, role)));
 
@@ -207,4 +356,7 @@ public class AuthService : IAuthService
 
         return (new JwtSecurityTokenHandler().WriteToken(token), expiration);
     }
+
+    private async Task<IdentityUser?> FindByIdInternalAsync(string id)
+        => await _authRepository.FindByIdAsync(id);
 }

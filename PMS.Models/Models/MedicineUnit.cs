@@ -13,9 +13,13 @@ namespace PMS.Models.Models;
 /// Both invariants are also enforced by partial unique indexes in the database.
 /// </para>
 /// </summary>
-public class MedicineUnit
+public class MedicineUnit : IHasTenant
 {
     public int MedicineUnitId { get; set; }
+
+    /// <inheritdoc/>
+    public Guid TenantId { get; set; }
+
     public int MedicineId { get; set; }
     public int UnitOfMeasureId { get; set; }
 
@@ -34,6 +38,7 @@ public class MedicineUnit
     public bool IsActive { get; set; } = true;
 
     public decimal UnitPrice { get; set; } = 0m;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     // Navigation
     public Medicine Medicine { get; set; } = null!;

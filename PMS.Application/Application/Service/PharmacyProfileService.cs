@@ -1,5 +1,6 @@
 using PMS.Application.Application.Interface.Repository;
 using PMS.Application.Application.Interface.Service;
+using PMS.Common;
 using PMS.Common.DTOs.PharmacyProfile;
 using PMS.Models.Models;
 
@@ -33,7 +34,6 @@ public class PharmacyProfileService : IPharmacyProfileService
     public async Task<(bool Success, string Message, PharmacyProfileResponseDto? Data)> CreateAsync(
         CreatePharmacyProfileDto dto)
     {
-        // Business rule: only one pharmacy profile should exist at a time.
         if (await _repo.AnyExistsAsync())
             return (false, "A pharmacy profile already exists. Use the update endpoint to modify it.", null);
 
@@ -47,7 +47,6 @@ public class PharmacyProfileService : IPharmacyProfileService
             VatNumber    = dto.VatNumber?.Trim(),
             Location     = dto.Location?.Trim(),
             CreatedAt    = DateTime.UtcNow,
-            UpdatedAt    = DateTime.UtcNow,
             PhoneNumbers = dto.PhoneNumbers.Select(p => new PharmacyPhoneNumber
             {
                 PhoneNumber = p.PhoneNumber.Trim(),
@@ -57,33 +56,37 @@ public class PharmacyProfileService : IPharmacyProfileService
 
         var created = await _repo.CreateAsync(profile);
 
-        // Reload to get generated IDs on child records
         var full = await _repo.GetByIdAsync(created.PharmacyProfileId);
         return (true, "Pharmacy profile created successfully.", MapToResponse(full!));
     }
 
-    public async Task<(bool Success, string Message, PharmacyProfileResponseDto? Data)> UpdateAsync(
+    public async Task<(bool Success, string Message, bool IsConflict, PharmacyProfileResponseDto? Data)> UpdateAsync(
         int id, UpdatePharmacyProfileDto dto)
     {
-        var profile = await _repo.GetByIdAsync(id);
-        if (profile is null)
-            return (false, $"Pharmacy profile with ID {id} not found.", null);
+        // 1. Read current entity (includes UpdatedAt)
+        var existing = await _repo.GetByIdAsync(id);
+        if (existing is null)
+            return (false, $"Pharmacy profile with ID {id} not found.", false, null);
 
+        // 2. Optimistic concurrency check
+        if (!ConcurrencyHelper.Matches(existing.UpdatedAt, dto.UpdatedAt))
+            return (false, "The record was modified by another user. Please refresh and try again.", true, null);
+
+        // 3. Validate phone numbers
         if (dto.PhoneNumbers == null || dto.PhoneNumbers.Count == 0)
-            return (false, "At least one phone number is required.", null);
+            return (false, "At least one phone number is required.", false, null);
 
-        // Mutate the tracked entity
-        profile = new PharmacyProfile
+        // 4. Build update entity, preserving logo/signature URLs
+        var profile = new PharmacyProfile
         {
             PharmacyProfileId = id,
             PharmacyName      = dto.PharmacyName.Trim(),
-            LogoUrl           = profile.LogoUrl,       // preserve existing logo
-            SignatureUrl      = profile.SignatureUrl,  // preserve existing signature
+            LogoUrl           = existing.LogoUrl,
+            SignatureUrl      = existing.SignatureUrl,
             PanNumber         = dto.PanNumber?.Trim(),
             VatNumber         = dto.VatNumber?.Trim(),
             Location          = dto.Location?.Trim(),
-            CreatedAt         = profile.CreatedAt,
-            UpdatedAt         = DateTime.UtcNow,
+            CreatedAt         = existing.CreatedAt,
             PhoneNumbers      = dto.PhoneNumbers.Select(p => new PharmacyPhoneNumber
             {
                 PharmacyProfileId = id,
@@ -95,7 +98,7 @@ public class PharmacyProfileService : IPharmacyProfileService
         await _repo.UpdateAsync(profile);
 
         var full = await _repo.GetByIdAsync(id);
-        return (true, "Pharmacy profile updated successfully.", MapToResponse(full!));
+        return (true, "Pharmacy profile updated successfully.", false, MapToResponse(full!));
     }
 
     public async Task<(bool Success, string Message, PharmacyProfileResponseDto? Data)> UpdateLogoAsync(
@@ -105,7 +108,7 @@ public class PharmacyProfileService : IPharmacyProfileService
         if (profile is null)
             return (false, $"Pharmacy profile with ID {id} not found.", null);
 
-        profile = new PharmacyProfile
+        var updated = new PharmacyProfile
         {
             PharmacyProfileId = id,
             PharmacyName      = profile.PharmacyName,
@@ -115,7 +118,6 @@ public class PharmacyProfileService : IPharmacyProfileService
             VatNumber         = profile.VatNumber,
             Location          = profile.Location,
             CreatedAt         = profile.CreatedAt,
-            UpdatedAt         = DateTime.UtcNow,
             PhoneNumbers      = profile.PhoneNumbers.Select(p => new PharmacyPhoneNumber
             {
                 PharmacyPhoneNumberId = p.PharmacyPhoneNumberId,
@@ -125,7 +127,7 @@ public class PharmacyProfileService : IPharmacyProfileService
             }).ToList()
         };
 
-        await _repo.UpdateAsync(profile);
+        await _repo.UpdateAsync(updated);
 
         var full = await _repo.GetByIdAsync(id);
         return (true, "Logo updated successfully.", MapToResponse(full!));
@@ -138,7 +140,7 @@ public class PharmacyProfileService : IPharmacyProfileService
         if (profile is null)
             return (false, $"Pharmacy profile with ID {id} not found.", null);
 
-        profile = new PharmacyProfile
+        var updated = new PharmacyProfile
         {
             PharmacyProfileId = id,
             PharmacyName      = profile.PharmacyName,
@@ -148,7 +150,6 @@ public class PharmacyProfileService : IPharmacyProfileService
             VatNumber         = profile.VatNumber,
             Location          = profile.Location,
             CreatedAt         = profile.CreatedAt,
-            UpdatedAt         = DateTime.UtcNow,
             PhoneNumbers      = profile.PhoneNumbers.Select(p => new PharmacyPhoneNumber
             {
                 PharmacyPhoneNumberId = p.PharmacyPhoneNumberId,
@@ -158,7 +159,7 @@ public class PharmacyProfileService : IPharmacyProfileService
             }).ToList()
         };
 
-        await _repo.UpdateAsync(profile);
+        await _repo.UpdateAsync(updated);
 
         var full = await _repo.GetByIdAsync(id);
         return (true, "Signature updated successfully.", MapToResponse(full!));

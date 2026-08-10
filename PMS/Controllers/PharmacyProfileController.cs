@@ -50,7 +50,6 @@ public class PharmacyProfileController : ControllerBase
     /// <summary>
     /// Create the pharmacy profile.
     /// Only one profile may exist — call the update endpoint for subsequent changes.
-    /// Logo and signature images are uploaded via their dedicated endpoints after creation.
     /// </summary>
     [HttpPost]
     [Authorize(Roles = $"{AppRoles.SystemAdmin},{AppRoles.PharmacyAdmin}")]
@@ -76,13 +75,15 @@ public class PharmacyProfileController : ControllerBase
     [ProducesResponseType(typeof(PharmacyProfileResponseDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Update(int id, [FromBody] UpdatePharmacyProfileDto dto)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        var (success, message, data) = await _service.UpdateAsync(id, dto);
+        var (success, message, isConflict, data) = await _service.UpdateAsync(id, dto);
         if (!success)
         {
+            if (isConflict) return Conflict(new { message });
             if (message.Contains("not found")) return NotFound(new { message });
             return BadRequest(new { message });
         }
@@ -109,11 +110,7 @@ public class PharmacyProfileController : ControllerBase
 
     // ── File uploads ───────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Upload or replace the pharmacy logo.
-    /// Accepted formats: JPG, JPEG, PNG, WebP. Max size: 5 MB.
-    /// Returns the stored relative URL and updates the profile record.
-    /// </summary>
+    /// <summary>Upload or replace the pharmacy logo.</summary>
     [HttpPost("{id:int}/upload-logo")]
     [Authorize(Roles = $"{AppRoles.SystemAdmin},{AppRoles.PharmacyAdmin}")]
     [ProducesResponseType(typeof(PharmacyProfileResponseDto), StatusCodes.Status200OK)]
@@ -136,11 +133,7 @@ public class PharmacyProfileController : ControllerBase
         return Ok(data);
     }
 
-    /// <summary>
-    /// Upload or replace the authorised signature image.
-    /// Accepted formats: JPG, JPEG, PNG, WebP. Max size: 5 MB.
-    /// Returns the stored relative URL and updates the profile record.
-    /// </summary>
+    /// <summary>Upload or replace the authorised signature image.</summary>
     [HttpPost("{id:int}/upload-signature")]
     [Authorize(Roles = $"{AppRoles.SystemAdmin},{AppRoles.PharmacyAdmin}")]
     [ProducesResponseType(typeof(PharmacyProfileResponseDto), StatusCodes.Status200OK)]
@@ -165,10 +158,6 @@ public class PharmacyProfileController : ControllerBase
 
     // ── Private helpers ────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Validates the uploaded image file.
-    /// Returns a <see cref="BadRequestObjectResult"/> if invalid, or null if valid.
-    /// </summary>
     private IActionResult? ValidateImageFile(IFormFile file)
     {
         if (file == null || file.Length == 0)
@@ -184,10 +173,6 @@ public class PharmacyProfileController : ControllerBase
         return null;
     }
 
-    /// <summary>
-    /// Saves the file to <c>wwwroot/{subFolder}</c> with a GUID-based filename
-    /// and returns the relative URL (e.g. <c>/pharmacy/logos/abc123.png</c>).
-    /// </summary>
     private async Task<string> SaveFileAsync(IFormFile file, string subFolder)
     {
         var uploadDir = Path.Combine(_env.WebRootPath ?? "wwwroot", subFolder);

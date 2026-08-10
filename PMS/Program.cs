@@ -8,11 +8,14 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// ── Identity + JWT + Auth Services ───────────────────────────────────────────
+// ── Identity + JWT + ITenantProvider + Auth + Subscription Services ───────────
 builder.Services.AddApplicationServices(builder.Configuration);
 
 // ── CRUD Services ─────────────────────────────────────────────────────────────
 builder.Services.AddCrudServices();
+
+// ── IP-based Rate Limiting ────────────────────────────────────────────────────
+builder.Services.AddConfiguredRateLimiting(builder.Configuration);
 
 // ── CORS ──────────────────────────────────────────────────────────────────────
 builder.Services.AddCors(options =>
@@ -29,17 +32,22 @@ builder.Services.AddCors(options =>
     });
 });
 
-// ── Controllers + OpenAPI ─────────────────────────────────────────────────────
+// ── Controllers + Subscription Gate Filter + OpenAPI ─────────────────────────
 builder.Services.AddControllers()
     .AddJsonOptions(opts =>
         opts.JsonSerializerOptions.Converters.Add(
-            new System.Text.Json.Serialization.JsonStringEnumConverter()));
+            new System.Text.Json.Serialization.JsonStringEnumConverter()))
+    .AddSubscriptionGateFilter();   // registers SubscriptionGateFilter globally
+
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
 // ── Seed roles ────────────────────────────────────────────────────────────────
 await app.SeedRolesAsync();
+
+// ── Seed subscription plan definitions ───────────────────────────────────────
+await app.SeedSubscriptionPlansAsync();
 
 // ── Middleware pipeline ───────────────────────────────────────────────────────
 if (app.Environment.IsDevelopment())
@@ -48,6 +56,9 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors("MyAppPolicy");
+
+// Rate limiting must come before auth so throttled requests are rejected early
+app.UseRateLimiter();
 
 // Serves files from wwwroot — includes:
 //   /prescriptions/*        (prescription images)

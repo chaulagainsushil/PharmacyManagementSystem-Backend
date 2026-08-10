@@ -59,13 +59,15 @@ public class CategoryController : ControllerBase
     [ProducesResponseType(typeof(CategoryResponseDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Update(int id, [FromBody] UpdateCategoryDto dto)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        var (success, message, data) = await _service.UpdateAsync(id, dto);
+        var (success, message, isConflict, data) = await _service.UpdateAsync(id, dto);
         if (!success)
         {
+            if (isConflict) return Conflict(new { message });
             if (message.Contains("not found")) return NotFound(new { message });
             return BadRequest(new { message });
         }

@@ -3,9 +3,13 @@ namespace PMS.Models.Models;
 /// <summary>
 /// One medicine+batch line within a disposal record.
 /// </summary>
-public class ExpiredMedicineDisposalItem
+public class ExpiredMedicineDisposalItem : IHasTenant
 {
     public int DisposalItemId { get; set; }
+
+    /// <inheritdoc/>
+    public Guid TenantId { get; set; }
+
     public int DisposalId { get; set; }
     public int MedicineId { get; set; }
     public int BatchId { get; set; }
@@ -15,6 +19,7 @@ public class ExpiredMedicineDisposalItem
 
     /// <summary>Reason for disposal (e.g. "Expired", "Damaged", "Near expiry recall").</summary>
     public string Reason { get; set; } = string.Empty;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     public ExpiredMedicineDisposal Disposal { get; set; } = null!;
     public Medicine Medicine { get; set; } = null!;

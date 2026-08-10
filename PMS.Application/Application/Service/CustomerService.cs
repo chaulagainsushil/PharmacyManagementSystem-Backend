@@ -1,5 +1,6 @@
 using PMS.Application.Application.Interface.Repository;
 using PMS.Application.Application.Interface.Service;
+using PMS.Common;
 using PMS.Common.DTOs.Customer;
 using PMS.Models.Models;
 
@@ -13,22 +14,12 @@ public class CustomerService : ICustomerService
 
     public async Task<IEnumerable<CustomerListItemDto>> GetAllAsync()
     {
-        var customers = await _repo.GetAllAsync();
-        return customers.Select(c => new CustomerListItemDto
-        {
-            CustomerId  = c.CustomerId,
-            FullName    = c.FullName,
-            PhoneNumber = c.PhoneNumber,
-            Address     = c.Address,
-            TotalSales  = c.Sales.Count,
-            CreatedAt   = c.CreatedAt
-        });
+        return await _repo.GetAllAsync();
     }
 
     public async Task<CustomerResponseDto?> GetByIdAsync(int id)
     {
-        var customer = await _repo.GetByIdAsync(id);
-        return customer is null ? null : MapToResponse(customer);
+        return await _repo.GetByIdAsync(id);
     }
 
     public async Task<(bool Success, string Message, CustomerResponseDto? Data)> CreateAsync(
@@ -45,26 +36,40 @@ public class CustomerService : ICustomerService
             CreatedAt   = DateTime.UtcNow
         };
 
-        var created = await _repo.CreateAsync(customer);
-        return (true, "Customer created successfully.", MapToResponse(created));
+        var created  = await _repo.CreateAsync(customer);
+        var response = await _repo.GetByIdAsync(created.CustomerId);
+        return (true, "Customer created successfully.", response);
     }
 
-    public async Task<(bool Success, string Message, CustomerResponseDto? Data)> UpdateAsync(
+    public async Task<(bool Success, string Message, bool IsConflict, CustomerResponseDto? Data)> UpdateAsync(
         int id, UpdateCustomerDto dto)
     {
-        var customer = await _repo.GetByIdAsync(id);
-        if (customer is null)
-            return (false, $"Customer with ID {id} not found.", null);
+        // 1. Read current DTO (includes UpdatedAt)
+        var existing = await _repo.GetByIdAsync(id);
+        if (existing is null)
+            return (false, $"Customer with ID {id} not found.", false, null);
 
+        // 2. Optimistic concurrency check
+        if (!ConcurrencyHelper.Matches(existing.UpdatedAt, dto.UpdatedAt))
+            return (false, "The record was modified by another user. Please refresh and try again.", true, null);
+
+        // 3. Business rule: duplicate phone
         if (await _repo.ExistsByPhoneAsync(dto.PhoneNumber, excludeId: id))
-            return (false, $"A customer with phone '{dto.PhoneNumber}' already exists.", null);
+            return (false, $"A customer with phone '{dto.PhoneNumber}' already exists.", false, null);
 
-        customer.FullName    = dto.FullName.Trim();
-        customer.PhoneNumber = dto.PhoneNumber.Trim();
-        customer.Address     = dto.Address?.Trim();
+        // 4. Fetch tracked entity and mutate
+        var entity = await _repo.GetEntityByIdAsync(id);
+        if (entity is null)
+            return (false, $"Customer with ID {id} not found.", false, null);
 
-        var updated = await _repo.UpdateAsync(customer);
-        return (true, "Customer updated successfully.", MapToResponse(updated));
+        entity.FullName    = dto.FullName.Trim();
+        entity.PhoneNumber = dto.PhoneNumber.Trim();
+        entity.Address     = dto.Address?.Trim();
+
+        await _repo.UpdateAsync(entity);
+
+        var updated = await _repo.GetByIdAsync(id);
+        return (true, "Customer updated successfully.", false, updated);
     }
 
     public async Task<(bool Success, string Message)> DeleteAsync(int id)
@@ -79,14 +84,4 @@ public class CustomerService : ICustomerService
         await _repo.DeleteAsync(id);
         return (true, "Customer deleted successfully.");
     }
-
-    private static CustomerResponseDto MapToResponse(Customer c) => new()
-    {
-        CustomerId  = c.CustomerId,
-        FullName    = c.FullName,
-        PhoneNumber = c.PhoneNumber,
-        Address     = c.Address,
-        TotalSales  = c.Sales?.Count ?? 0,
-        CreatedAt   = c.CreatedAt
-    };
 }

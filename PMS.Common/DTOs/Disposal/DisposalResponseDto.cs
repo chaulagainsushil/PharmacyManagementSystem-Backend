@@ -7,5 +7,6 @@ public class DisposalResponseDto
     public int PharmacistId { get; set; }
     public string PharmacistName { get; set; } = string.Empty;
     public DateTime DisposalDate { get; set; }
+    public DateTime UpdatedAt { get; set; }
     public List<DisposalItemResponseDto> Items { get; set; } = new();
 }

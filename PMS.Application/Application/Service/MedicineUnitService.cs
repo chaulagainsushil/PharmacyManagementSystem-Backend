@@ -1,5 +1,6 @@
 using PMS.Application.Application.Interface.Repository;
 using PMS.Application.Application.Interface.Service;
+using PMS.Common;
 using PMS.Common.DTOs.Uom;
 using PMS.Models.Models;
 
@@ -53,7 +54,6 @@ public class MedicineUnitService : IMedicineUnitService
             if (medicine is null)
                 return (false, $"Medicine with ID {cmd.MedicineId} not found.", null);
 
-            // Clear existing base unit (DB partial index only allows one)
             foreach (var existingUnit in medicine.Units.Where(u => u.IsBaseUnit))
             {
                 existingUnit.IsBaseUnit = false;
@@ -91,19 +91,24 @@ public class MedicineUnitService : IMedicineUnitService
         return (true, "Unit attached to medicine.", MapToDto(full!));
     }
 
-    public async Task<(bool Success, string Message)> SetDefaultUnitAsync(SetDefaultUnitCommand cmd)
+    public async Task<(bool Success, string Message, bool IsConflict)> SetDefaultUnitAsync(
+        SetDefaultUnitCommand cmd)
     {
         // Load medicine with all its current units
         var medicine = await _repo.GetMedicineWithUnitsAsync(cmd.MedicineId);
         if (medicine is null)
-            return (false, $"Medicine with ID {cmd.MedicineId} not found.");
+            return (false, $"Medicine with ID {cmd.MedicineId} not found.", false);
 
         var target = medicine.Units.FirstOrDefault(u => u.MedicineUnitId == cmd.MedicineUnitId);
         if (target is null)
-            return (false, $"MedicineUnit {cmd.MedicineUnitId} is not attached to medicine {cmd.MedicineId}.");
+            return (false, $"MedicineUnit {cmd.MedicineUnitId} is not attached to medicine {cmd.MedicineId}.", false);
+
+        // Optimistic concurrency check using the target unit's UpdatedAt
+        if (!ConcurrencyHelper.Matches(target.UpdatedAt, cmd.UpdatedAt))
+            return (false, "The record was modified by another user. Please refresh and try again.", true);
 
         if (!target.IsActive)
-            return (false, "Cannot set an inactive unit as the default.");
+            return (false, "Cannot set an inactive unit as the default.", false);
 
         // Unset any current default
         foreach (var u in medicine.Units.Where(u => u.IsDefault && u.MedicineUnitId != cmd.MedicineUnitId))
@@ -115,22 +120,22 @@ public class MedicineUnitService : IMedicineUnitService
         target.IsDefault = true;
         await _repo.UpdateAsync(target);
 
-        return (true, $"Default unit updated to '{target.UnitOfMeasure?.Name ?? target.MedicineUnitId.ToString()}'.");
+        return (true, $"Default unit updated to '{target.UnitOfMeasure?.Name ?? target.MedicineUnitId.ToString()}'.", false);
     }
 
-    public async Task<(bool Success, string Message, MedicineUnitDto? Data)> UpdatePriceAsync(
+    public async Task<(bool Success, string Message, bool IsConflict, MedicineUnitDto? Data)> UpdatePriceAsync(
         int medicineUnitId, UpdateMedicineUnitPriceCommand cmd)
     {
+        // Read current state (AsNoTracking)
         var unit = await _repo.GetByIdAsync(medicineUnitId);
         if (unit is null)
-            return (false, $"MedicineUnit with ID {medicineUnitId} not found.", null);
+            return (false, $"MedicineUnit with ID {medicineUnitId} not found.", false, null);
 
-        // GetByIdAsync returns AsNoTracking — reload tracked
-        var tracked = await _repo.GetByIdAsync(medicineUnitId);
-        if (tracked is null)
-            return (false, $"MedicineUnit with ID {medicineUnitId} not found.", null);
+        // Optimistic concurrency check
+        if (!ConcurrencyHelper.Matches(unit.UpdatedAt, cmd.UpdatedAt))
+            return (false, "The record was modified by another user. Please refresh and try again.", true, null);
 
-        // Build a fresh tracked entity for update
+        // Build a fresh entity for update (GetByIdAsync is AsNoTracking)
         var updatable = new MedicineUnit
         {
             MedicineUnitId         = unit.MedicineUnitId,
@@ -145,7 +150,7 @@ public class MedicineUnitService : IMedicineUnitService
 
         var updated = await _repo.UpdateAsync(updatable);
         var full    = await _repo.GetByIdAsync(updated.MedicineUnitId);
-        return (true, "Unit price updated.", MapToDto(full!));
+        return (true, "Unit price updated.", false, MapToDto(full!));
     }
 
     public async Task<(bool Success, string Message)> DeactivateAsync(int medicineUnitId)
@@ -164,7 +169,7 @@ public class MedicineUnitService : IMedicineUnitService
             UnitOfMeasureId        = unit.UnitOfMeasureId,
             ConversionFactorToBase = unit.ConversionFactorToBase,
             IsBaseUnit             = unit.IsBaseUnit,
-            IsDefault              = false,   // deactivating auto-clears default
+            IsDefault              = false,
             IsActive               = false,
             UnitPrice              = unit.UnitPrice
         };
@@ -186,7 +191,8 @@ public class MedicineUnitService : IMedicineUnitService
         IsBaseUnit             = mu.IsBaseUnit,
         IsDefault              = mu.IsDefault,
         IsActive               = mu.IsActive,
-        UnitPrice              = mu.UnitPrice
+        UnitPrice              = mu.UnitPrice,
+        UpdatedAt              = mu.UpdatedAt
     };
 
     private static MedicineUnitForPosDto MapToPos(MedicineUnit mu) => new()
@@ -197,6 +203,7 @@ public class MedicineUnitService : IMedicineUnitService
         UnitPrice              = mu.UnitPrice,
         ConversionFactorToBase = mu.ConversionFactorToBase,
         IsDefault              = mu.IsDefault,
-        IsBaseUnit             = mu.IsBaseUnit
+        IsBaseUnit             = mu.IsBaseUnit,
+        UpdatedAt              = mu.UpdatedAt
     };
 }

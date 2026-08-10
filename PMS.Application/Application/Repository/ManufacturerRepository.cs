@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using PMS.Application.Application.Interface.Repository;
+using PMS.Common.DTOs.Manufacturer;
 using PMS.Models.Models;
 using PMS.Repository.Data;
 
@@ -11,18 +12,34 @@ public class ManufacturerRepository : IManufacturerRepository
 
     public ManufacturerRepository(ApplicationDbContext db) => _db = db;
 
-    public async Task<IEnumerable<Manufacturer>> GetAllAsync() =>
+    public async Task<IEnumerable<ManufacturerListItemDto>> GetAllAsync() =>
         await _db.Manufacturers
-            .Include(m => m.Medicines)
             .AsNoTracking()
             .OrderBy(m => m.Name)
+            .Select(m => new ManufacturerListItemDto
+            {
+                ManufacturerId = m.ManufacturerId,
+                Name           = m.Name,
+                MedicineCount  = m.Medicines.Count(),
+                UpdatedAt      = m.UpdatedAt
+            })
             .ToListAsync();
 
-    public async Task<Manufacturer?> GetByIdAsync(int id) =>
+    public async Task<ManufacturerResponseDto?> GetByIdAsync(int id) =>
         await _db.Manufacturers
-            .Include(m => m.Medicines)
             .AsNoTracking()
-            .FirstOrDefaultAsync(m => m.ManufacturerId == id);
+            .Where(m => m.ManufacturerId == id)
+            .Select(m => new ManufacturerResponseDto
+            {
+                ManufacturerId = m.ManufacturerId,
+                Name           = m.Name,
+                MedicineCount  = m.Medicines.Count(),
+                UpdatedAt      = m.UpdatedAt
+            })
+            .FirstOrDefaultAsync();
+
+    public async Task<Manufacturer?> GetEntityByIdAsync(int id) =>
+        await _db.Manufacturers.FindAsync(id);
 
     public async Task<bool> ExistsByNameAsync(string name, int? excludeId = null) =>
         await _db.Manufacturers

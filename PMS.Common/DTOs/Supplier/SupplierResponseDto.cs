@@ -8,4 +8,5 @@ public class SupplierResponseDto
     public string? Phone { get; set; }
     public string? Address { get; set; }
     public int BatchCount { get; set; }
+    public DateTime UpdatedAt { get; set; }
 }

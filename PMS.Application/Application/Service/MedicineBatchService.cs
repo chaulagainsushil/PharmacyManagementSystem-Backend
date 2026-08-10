@@ -1,5 +1,6 @@
 using PMS.Application.Application.Interface.Repository;
 using PMS.Application.Application.Interface.Service;
+using PMS.Common;
 using PMS.Common.DTOs.MedicineBatch;
 using PMS.Models.Models;
 
@@ -13,20 +14,17 @@ public class MedicineBatchService : IMedicineBatchService
 
     public async Task<IEnumerable<MedicineBatchListItemDto>> GetAllAsync()
     {
-        var batches = await _repo.GetAllAsync();
-        return batches.Select(MapToListItem);
+        return await _repo.GetAllAsync();
     }
 
     public async Task<IEnumerable<MedicineBatchListItemDto>> GetByMedicineIdAsync(int medicineId)
     {
-        var batches = await _repo.GetByMedicineIdAsync(medicineId);
-        return batches.Select(MapToListItem);
+        return await _repo.GetByMedicineIdAsync(medicineId);
     }
 
     public async Task<MedicineBatchResponseDto?> GetByIdAsync(int id)
     {
-        var batch = await _repo.GetByIdAsync(id);
-        return batch is null ? null : MapToResponse(batch);
+        return await _repo.GetByIdAsync(id);
     }
 
     public async Task<(bool Success, string Message, MedicineBatchResponseDto? Data)> CreateAsync(
@@ -52,29 +50,41 @@ public class MedicineBatchService : IMedicineBatchService
 
         var created = await _repo.CreateAsync(batch);
         var full    = await _repo.GetByIdAsync(created.BatchId);
-        return (true, "Medicine batch created successfully.", MapToResponse(full!));
+        return (true, "Medicine batch created successfully.", full);
     }
 
-    public async Task<(bool Success, string Message, MedicineBatchResponseDto? Data)> UpdateAsync(
+    public async Task<(bool Success, string Message, bool IsConflict, MedicineBatchResponseDto? Data)> UpdateAsync(
         int id, UpdateMedicineBatchDto dto)
     {
-        var batch = await _repo.GetByIdAsync(id);
-        if (batch is null)
-            return (false, $"Medicine batch with ID {id} not found.", null);
+        // 1. Read current DTO (includes UpdatedAt)
+        var existing = await _repo.GetByIdAsync(id);
+        if (existing is null)
+            return (false, $"Medicine batch with ID {id} not found.", false, null);
 
+        // 2. Optimistic concurrency check
+        if (!ConcurrencyHelper.Matches(existing.UpdatedAt, dto.UpdatedAt))
+            return (false, "The record was modified by another user. Please refresh and try again.", true, null);
+
+        // 3. Business rule: duplicate batch number
         if (await _repo.ExistsByBatchNumberAsync(dto.BatchNumber, excludeId: id))
-            return (false, $"Batch number '{dto.BatchNumber}' already exists.", null);
+            return (false, $"Batch number '{dto.BatchNumber}' already exists.", false, null);
 
-        batch.BatchNumber            = dto.BatchNumber.Trim();
-        batch.SupplierId             = dto.SupplierId;
-        batch.ManufactureDate        = dto.ManufactureDate;
-        batch.ExpiryDate             = dto.ExpiryDate;
-        batch.QuantityInTablets      = dto.QuantityInTablets;
-        batch.PurchasePricePerTablet = dto.PurchasePricePerTablet;
+        // 4. Fetch tracked entity and mutate
+        var entity = await _repo.GetEntityByIdAsync(id);
+        if (entity is null)
+            return (false, $"Medicine batch with ID {id} not found.", false, null);
 
-        await _repo.UpdateAsync(batch);
+        entity.BatchNumber            = dto.BatchNumber.Trim();
+        entity.SupplierId             = dto.SupplierId;
+        entity.ManufactureDate        = dto.ManufactureDate;
+        entity.ExpiryDate             = dto.ExpiryDate;
+        entity.QuantityInTablets      = dto.QuantityInTablets;
+        entity.PurchasePricePerTablet = dto.PurchasePricePerTablet;
+
+        await _repo.UpdateAsync(entity);
+
         var full = await _repo.GetByIdAsync(id);
-        return (true, "Medicine batch updated successfully.", MapToResponse(full!));
+        return (true, "Medicine batch updated successfully.", false, full);
     }
 
     public async Task<BulkCreateMedicineBatchResultDto> BulkCreateAsync(BulkCreateMedicineBatchDto dto)
@@ -116,37 +126,6 @@ public class MedicineBatchService : IMedicineBatchService
 
     public async Task<IEnumerable<MedicineBatchListItemDto>> GetNearExpiryAsync(int days = 45)
     {
-        var batches = await _repo.GetNearExpiryAsync(days);
-        return batches.Select(MapToListItem);
+        return await _repo.GetNearExpiryAsync(days);
     }
-
-    // ── Mapping helpers ────────────────────────────────────────────────────────
-    private static MedicineBatchResponseDto MapToResponse(MedicineBatch b) => new()
-    {
-        BatchId                = b.BatchId,
-        MedicineId             = b.MedicineId,
-        MedicineName           = b.Medicine?.Name ?? string.Empty,
-        BatchNumber            = b.BatchNumber,
-        SupplierId             = b.SupplierId,
-        SupplierName           = b.Supplier?.Name,
-        ManufactureDate        = b.ManufactureDate,
-        ExpiryDate             = b.ExpiryDate,
-        QuantityInTablets      = b.QuantityInTablets,
-        PurchasePricePerTablet = b.PurchasePricePerTablet,
-        ReceivedDate           = b.ReceivedDate,
-        IsExpired              = b.IsExpired
-    };
-
-    private static MedicineBatchListItemDto MapToListItem(MedicineBatch b) => new()
-    {
-        BatchId                = b.BatchId,
-        MedicineId             = b.MedicineId,
-        MedicineName           = b.Medicine?.Name ?? string.Empty,
-        BatchNumber            = b.BatchNumber,
-        SupplierName           = b.Supplier?.Name,
-        ExpiryDate             = b.ExpiryDate,
-        QuantityInTablets      = b.QuantityInTablets,
-        PurchasePricePerTablet = b.PurchasePricePerTablet,
-        IsExpired              = b.IsExpired
-    };
 }

@@ -14,6 +14,7 @@ public class PharmacyPhoneNumber
 
     /// <summary>Optional label — e.g. "Landline", "Mobile", "Emergency".</summary>
     public string? Label { get; set; }
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     // ── Navigation ────────────────────────────────────────────────────────────
     public PharmacyProfile PharmacyProfile { get; set; } = null!;

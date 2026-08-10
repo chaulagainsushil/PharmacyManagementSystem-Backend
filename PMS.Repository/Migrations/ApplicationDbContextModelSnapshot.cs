@@ -231,6 +231,12 @@ namespace PMS.Repository.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.HasKey("CategoryId");
 
                     b.ToTable("Categories");
@@ -261,9 +267,15 @@ namespace PMS.Repository.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.HasKey("CustomerId");
 
-                    b.HasIndex("PhoneNumber")
+                    b.HasIndex("TenantId", "PhoneNumber")
                         .IsUnique();
 
                     b.ToTable("Customers");
@@ -290,6 +302,12 @@ namespace PMS.Repository.Migrations
 
                     b.Property<int>("PharmacistId")
                         .HasColumnType("integer");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<int?>("UserId")
                         .HasColumnType("integer");
@@ -331,6 +349,12 @@ namespace PMS.Repository.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.HasKey("DisposalItemId");
 
                     b.HasIndex("BatchId");
@@ -354,6 +378,12 @@ namespace PMS.Repository.Migrations
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.HasKey("ManufacturerId");
 
@@ -407,6 +437,12 @@ namespace PMS.Repository.Migrations
                     b.Property<int>("TabletsPerStrip")
                         .HasColumnType("integer");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.HasKey("MedicineId");
 
                     b.HasIndex("CategoryId");
@@ -450,13 +486,22 @@ namespace PMS.Repository.Migrations
                     b.Property<int?>("SupplierId")
                         .HasColumnType("integer");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.HasKey("BatchId");
 
                     b.HasIndex("MedicineId");
 
                     b.HasIndex("SupplierId");
 
-                    b.ToTable("MedicineBatches");
+                    b.ToTable("MedicineBatches", t =>
+                        {
+                            t.HasCheckConstraint("CK_MedicineBatches_QuantityInTablets_NonNegative", "\"QuantityInTablets\" >= 0");
+                        });
                 });
 
             modelBuilder.Entity("PMS.Models.Models.MedicineUnit", b =>
@@ -482,11 +527,17 @@ namespace PMS.Repository.Migrations
                     b.Property<int>("MedicineId")
                         .HasColumnType("integer");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
                     b.Property<int>("UnitOfMeasureId")
                         .HasColumnType("integer");
 
                     b.Property<decimal>("UnitPrice")
                         .HasColumnType("numeric(18,4)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.HasKey("MedicineUnitId");
 
@@ -528,6 +579,9 @@ namespace PMS.Repository.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.HasKey("PharmacyPhoneNumberId");
 
                     b.HasIndex("PharmacyProfileId");
@@ -567,6 +621,9 @@ namespace PMS.Repository.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -575,6 +632,9 @@ namespace PMS.Repository.Migrations
                         .HasColumnType("character varying(20)");
 
                     b.HasKey("PharmacyProfileId");
+
+                    b.HasIndex("TenantId")
+                        .IsUnique();
 
                     b.ToTable("PharmacyProfiles");
                 });
@@ -618,17 +678,23 @@ namespace PMS.Repository.Migrations
                     b.Property<decimal>("Subtotal")
                         .HasColumnType("numeric(18,4)");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
                     b.Property<decimal>("TotalAmount")
                         .HasColumnType("numeric(18,4)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.HasKey("SaleId");
 
                     b.HasIndex("CustomerId");
 
-                    b.HasIndex("InvoiceNumber")
-                        .IsUnique();
-
                     b.HasIndex("PharmacistId");
+
+                    b.HasIndex("TenantId", "InvoiceNumber")
+                        .IsUnique();
 
                     b.ToTable("Sales");
                 });
@@ -668,8 +734,14 @@ namespace PMS.Repository.Migrations
                     b.Property<int>("SaleId")
                         .HasColumnType("integer");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
                     b.Property<decimal>("UnitPrice")
                         .HasColumnType("numeric(18,4)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.HasKey("SaleItemId");
 
@@ -682,6 +754,82 @@ namespace PMS.Repository.Migrations
                     b.HasIndex("SaleId");
 
                     b.ToTable("SaleItems");
+                });
+
+            modelBuilder.Entity("PMS.Models.Models.Subscription", b =>
+                {
+                    b.Property<int>("SubscriptionId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("SubscriptionId"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("EndDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PaymentReference")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("PlanType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime>("StartDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("SubscriptionId");
+
+                    b.HasIndex("TenantId");
+
+                    b.ToTable("Subscriptions");
+                });
+
+            modelBuilder.Entity("PMS.Models.Models.SubscriptionPlanDefinition", b =>
+                {
+                    b.Property<int>("SubscriptionPlanDefinitionId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("SubscriptionPlanDefinitionId"));
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int?>("DurationInDays")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("PlanType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<decimal>("Price")
+                        .HasColumnType("numeric(18,4)");
+
+                    b.HasKey("SubscriptionPlanDefinitionId");
+
+                    b.HasIndex("PlanType")
+                        .IsUnique();
+
+                    b.ToTable("SubscriptionPlanDefinitions");
                 });
 
             modelBuilder.Entity("PMS.Models.Models.Supplier", b =>
@@ -704,6 +852,12 @@ namespace PMS.Repository.Migrations
                     b.Property<string>("Phone")
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.HasKey("SupplierId");
 
@@ -731,9 +885,15 @@ namespace PMS.Repository.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.HasKey("UnitOfMeasureId");
 
-                    b.HasIndex("Name")
+                    b.HasIndex("TenantId", "Name")
                         .IsUnique();
 
                     b.ToTable("UnitsOfMeasure");
@@ -756,6 +916,9 @@ namespace PMS.Repository.Migrations
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.HasKey("UserId");
 
@@ -974,6 +1137,18 @@ namespace PMS.Repository.Migrations
                     b.Navigation("Sale");
                 });
 
+            modelBuilder.Entity("PMS.Models.Models.Subscription", b =>
+                {
+                    b.HasOne("PMS.Models.Models.PharmacyProfile", "Tenant")
+                        .WithMany("Subscriptions")
+                        .HasForeignKey("TenantId")
+                        .HasPrincipalKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Tenant");
+                });
+
             modelBuilder.Entity("PMS.Models.Models.Category", b =>
                 {
                     b.Navigation("Medicines");
@@ -1011,6 +1186,8 @@ namespace PMS.Repository.Migrations
             modelBuilder.Entity("PMS.Models.Models.PharmacyProfile", b =>
                 {
                     b.Navigation("PhoneNumbers");
+
+                    b.Navigation("Subscriptions");
                 });
 
             modelBuilder.Entity("PMS.Models.Models.Sale", b =>

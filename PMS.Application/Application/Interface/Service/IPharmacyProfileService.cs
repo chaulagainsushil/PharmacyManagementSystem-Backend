@@ -10,7 +10,7 @@ public interface IPharmacyProfileService
     Task<(bool Success, string Message, PharmacyProfileResponseDto? Data)> CreateAsync(
         CreatePharmacyProfileDto dto);
 
-    Task<(bool Success, string Message, PharmacyProfileResponseDto? Data)> UpdateAsync(
+    Task<(bool Success, string Message, bool IsConflict, PharmacyProfileResponseDto? Data)> UpdateAsync(
         int id, UpdatePharmacyProfileDto dto);
 
     /// <summary>Updates only the logo URL (called after a successful file upload).</summary>

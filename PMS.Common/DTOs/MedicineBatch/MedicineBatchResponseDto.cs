@@ -14,5 +14,6 @@ public class MedicineBatchResponseDto
     public int QuantityInTablets { get; set; }
     public decimal PurchasePricePerTablet { get; set; }
     public DateTime ReceivedDate { get; set; }
+    public DateTime UpdatedAt { get; set; }
     public bool IsExpired { get; set; }
 }

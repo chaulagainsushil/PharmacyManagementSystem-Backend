@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using PMS.Application.Application.Interface.Repository;
+using PMS.Common.DTOs.Disposal;
 using PMS.Models.Models;
 using PMS.Repository.Data;
 
@@ -14,10 +15,18 @@ public class DisposalRepository : IDisposalRepository
     public async Task<bool> PharmacistExistsAsync(int pharmacistId) =>
         await _db.AppUsers.AnyAsync(u => u.UserId == pharmacistId);
 
-    public async Task<MedicineBatch?> GetBatchWithMedicineAsync(int batchId) =>
+    public async Task<MedicineBatch?> GetBatchAsync(int batchId) =>
         await _db.MedicineBatches
-            .Include(b => b.Medicine)
-            .FirstOrDefaultAsync(b => b.BatchId == batchId);
+            .Where(b => b.BatchId == batchId)
+            .Select(b => new MedicineBatch
+            {
+                BatchId           = b.BatchId,
+                MedicineId        = b.MedicineId,
+                BatchNumber       = b.BatchNumber,
+                QuantityInTablets = b.QuantityInTablets,
+                ExpiryDate        = b.ExpiryDate
+            })
+            .FirstOrDefaultAsync();
 
     public async Task<ExpiredMedicineDisposal> SaveDisposalAsync(
         ExpiredMedicineDisposal disposal,
@@ -30,7 +39,14 @@ public class DisposalRepository : IDisposalRepository
             {
                 var batch = await _db.MedicineBatches.FindAsync(batchId)
                     ?? throw new InvalidOperationException($"Batch {batchId} not found.");
+
                 batch.QuantityInTablets -= tablets;
+
+                if (batch.QuantityInTablets < 0)
+                    throw new InvalidOperationException(
+                        $"Insufficient stock in batch {batch.BatchNumber} (ID {batchId}). " +
+                        "The disposal cannot be completed because stock would go negative. " +
+                        "This may be caused by a concurrent request.");
             }
 
             _db.Set<ExpiredMedicineDisposal>().Add(disposal);
@@ -45,29 +61,66 @@ public class DisposalRepository : IDisposalRepository
         }
     }
 
-    public async Task<ExpiredMedicineDisposal?> GetDisposalWithDetailsAsync(int disposalId) =>
+    public async Task<DisposalResponseDto?> GetDisposalWithDetailsAsync(int disposalId) =>
         await _db.Set<ExpiredMedicineDisposal>()
-            .Include(d => d.Pharmacist)
-            .Include(d => d.Items).ThenInclude(i => i.Medicine)
-            .Include(d => d.Items).ThenInclude(i => i.Batch)
+            .Where(d => d.DisposalId == disposalId)
             .AsNoTracking()
-            .FirstOrDefaultAsync(d => d.DisposalId == disposalId);
+            .Select(d => new DisposalResponseDto
+            {
+                DisposalId     = d.DisposalId,
+                DisposalNumber = d.DisposalNumber,
+                PharmacistId   = d.PharmacistId,
+                PharmacistName = d.Pharmacist.FullName,
+                DisposalDate   = d.DisposalDate,
+                UpdatedAt      = d.UpdatedAt,
+                Items = d.Items
+                    .Select(i => new DisposalItemResponseDto
+                    {
+                        DisposalItemId    = i.DisposalItemId,
+                        MedicineId        = i.MedicineId,
+                        MedicineName      = i.Medicine.Name,
+                        BatchId           = i.BatchId,
+                        BatchNumber       = i.Batch.BatchNumber,
+                        QuantityInTablets = i.QuantityInTablets,
+                        Reason            = i.Reason
+                    })
+                    .ToList()
+            })
+            .FirstOrDefaultAsync();
 
-    public async Task<IReadOnlyList<ExpiredMedicineDisposal>> GetAllDisposalsAsync() =>
+    public async Task<IReadOnlyList<DisposalResponseDto>> GetAllDisposalsAsync() =>
         await _db.Set<ExpiredMedicineDisposal>()
-            .Include(d => d.Pharmacist)
-            .Include(d => d.Items).ThenInclude(i => i.Medicine)
-            .Include(d => d.Items).ThenInclude(i => i.Batch)
             .AsNoTracking()
             .OrderByDescending(d => d.DisposalDate)
+            .Select(d => new DisposalResponseDto
+            {
+                DisposalId     = d.DisposalId,
+                DisposalNumber = d.DisposalNumber,
+                PharmacistId   = d.PharmacistId,
+                PharmacistName = d.Pharmacist.FullName,
+                DisposalDate   = d.DisposalDate,
+                UpdatedAt      = d.UpdatedAt,
+                Items = d.Items
+                    .Select(i => new DisposalItemResponseDto
+                    {
+                        DisposalItemId    = i.DisposalItemId,
+                        MedicineId        = i.MedicineId,
+                        MedicineName      = i.Medicine.Name,
+                        BatchId           = i.BatchId,
+                        BatchNumber       = i.Batch.BatchNumber,
+                        QuantityInTablets = i.QuantityInTablets,
+                        Reason            = i.Reason
+                    })
+                    .ToList()
+            })
             .ToListAsync();
 
     public async Task<string> GenerateDisposalNumberAsync()
     {
-        var today = DateTime.UtcNow.Date;
+        var today  = DateTime.UtcNow.Date;
         var prefix = $"DSP-{today:yyyyMMdd}-";
-        var countToday = await _db.Set<ExpiredMedicineDisposal>()
+        var count  = await _db.Set<ExpiredMedicineDisposal>()
             .CountAsync(d => d.DisposalNumber.StartsWith(prefix));
-        return $"{prefix}{(countToday + 1):D4}";
+        return $"{prefix}{(count + 1):D4}";
     }
 }

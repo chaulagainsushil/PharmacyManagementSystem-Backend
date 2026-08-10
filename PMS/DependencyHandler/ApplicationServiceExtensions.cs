@@ -1,7 +1,9 @@
+using Microsoft.AspNetCore.Mvc;
 using PMS.Application.Application.Interface.Repository;
 using PMS.Application.Application.Interface.Service;
 using PMS.Application.Application.Repository;
 using PMS.Application.Application.Service;
+using PMS.Filters;
 
 namespace PMS.DependencyHandler;
 
@@ -61,5 +63,17 @@ public static class ApplicationServiceExtensions
         services.AddScoped<IPharmacyProfileService, PharmacyProfileService>();
 
         return services;
+    }
+
+    /// <summary>
+    /// Configures MVC to register the <see cref="SubscriptionGateFilter"/> globally
+    /// so it applies to every controller action without requiring a per-controller attribute.
+    /// </summary>
+    public static IMvcBuilder AddSubscriptionGateFilter(this IMvcBuilder mvcBuilder)
+    {
+        mvcBuilder.AddMvcOptions(options =>
+            options.Filters.AddService<SubscriptionGateFilter>());
+
+        return mvcBuilder;
     }
 }

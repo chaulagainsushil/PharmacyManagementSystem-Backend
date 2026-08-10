@@ -17,6 +17,7 @@ public class MedicineUnitDto
     public bool IsDefault { get; set; }
     public bool IsActive { get; set; }
     public decimal UnitPrice { get; set; }
+    public DateTime UpdatedAt { get; set; }
 }
 
 /// <summary>
@@ -32,6 +33,7 @@ public class MedicineUnitForPosDto
     public decimal ConversionFactorToBase { get; set; }
     public bool IsDefault { get; set; }
     public bool IsBaseUnit { get; set; }
+    public DateTime UpdatedAt { get; set; }
 }
 
 // ── Commands ──────────────────────────────────────────────────────────────────
@@ -72,6 +74,8 @@ public class SetDefaultUnitCommand
     [Required]
     [Range(1, int.MaxValue)]
     public int MedicineUnitId { get; set; }
+
+    public DateTime UpdatedAt { get; set; }
 }
 
 /// <summary>Update the price for an existing MedicineUnit.</summary>
@@ -80,4 +84,6 @@ public class UpdateMedicineUnitPriceCommand
     [Required]
     [Range(0, double.MaxValue, ErrorMessage = "UnitPrice must be non-negative.")]
     public decimal UnitPrice { get; set; }
+
+    public DateTime UpdatedAt { get; set; }
 }

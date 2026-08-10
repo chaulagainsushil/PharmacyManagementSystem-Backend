@@ -52,15 +52,19 @@ public class SupplierController : ControllerBase
     [ProducesResponseType(typeof(SupplierResponseDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Update(int id, [FromBody] UpdateSupplierDto dto)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        var (success, message, data) = await _service.UpdateAsync(id, dto);
+        var (success, message, isConflict, data) = await _service.UpdateAsync(id, dto);
         if (!success)
+        {
+            if (isConflict) return Conflict(new { message });
             return message.Contains("not found")
                 ? NotFound(new { message })
                 : BadRequest(new { message });
+        }
 
         return Ok(data);
     }

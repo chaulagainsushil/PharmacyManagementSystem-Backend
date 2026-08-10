@@ -27,6 +27,7 @@ public class MedicineResponseDto
 
     public int TotalStockInTablets { get; set; }
     public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
 
     /// <summary>All units attached to this medicine (active and inactive), default unit first.</summary>
     public List<MedicineUnitDto> Units { get; set; } = new();

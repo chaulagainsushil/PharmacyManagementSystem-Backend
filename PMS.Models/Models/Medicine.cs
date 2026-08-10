@@ -1,8 +1,12 @@
 namespace PMS.Models.Models;
 
-public class Medicine
+public class Medicine : IHasTenant
 {
     public int MedicineId { get; set; }
+
+    /// <inheritdoc/>
+    public Guid TenantId { get; set; }
+
     public string Name { get; set; } = string.Empty;
     public string? GenericName { get; set; }
     public int? CategoryId { get; set; }
@@ -27,6 +31,7 @@ public class Medicine
     public bool RequiresPrescription { get; set; } = false;
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     // ── Navigation ─────────────────────────────────────────────────────────────
     public Category? Category { get; set; }
