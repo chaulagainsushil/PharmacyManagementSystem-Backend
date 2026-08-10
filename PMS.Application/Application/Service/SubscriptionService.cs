@@ -19,7 +19,10 @@ public class SubscriptionService : ISubscriptionService
     public async Task<SubscriptionResponseDto?> GetCurrentAsync(Guid tenantId)
     {
         var subscription = await _repo.GetActiveByTenantAsync(tenantId);
-        return subscription is null ? null : MapToDto(subscription);
+        if (subscription is null) return null;
+
+        var plan = await _repo.GetPlanDefinitionAsync(subscription.PlanType);
+        return MapToDto(subscription, plan);
     }
 
     /// <inheritdoc/>
@@ -93,10 +96,10 @@ public class SubscriptionService : ISubscriptionService
         };
 
         await _repo.CreateAsync(subscription);
-        return MapToDto(subscription);
+        return MapToDto(subscription, plan);
     }
 
-    private static SubscriptionResponseDto MapToDto(Subscription s)
+    private static SubscriptionResponseDto MapToDto(Subscription s, SubscriptionPlanDefinition? plan = null)
     {
         var daysRemaining = s.EndDate.HasValue
             ? (int?)Math.Max(0, (int)(s.EndDate.Value - DateTime.UtcNow).TotalDays)
@@ -112,7 +115,8 @@ public class SubscriptionService : ISubscriptionService
             Status           = s.Status,
             PaymentReference = s.PaymentReference,
             IsActive         = s.IsCurrentlyActive(),
-            DaysRemaining    = daysRemaining
+            DaysRemaining    = daysRemaining,
+            MedicineLimit    = plan?.MedicineLimit
         };
     }
 }

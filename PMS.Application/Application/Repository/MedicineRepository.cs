@@ -129,6 +129,11 @@ public class MedicineRepository : IMedicineRepository
                           && (excludeId == null || m.MedicineId != excludeId));
     }
 
+    public async Task<int> CountAsync()
+    {
+        return await _db.Medicines.CountAsync();
+    }
+
     public async Task<Medicine> CreateAsync(Medicine medicine)
     {
         _db.Medicines.Add(medicine);

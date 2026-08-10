@@ -816,6 +816,9 @@ namespace PMS.Repository.Migrations
                     b.Property<int?>("DurationInDays")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("MedicineLimit")
+                        .HasColumnType("integer");
+
                     b.Property<string>("PlanType")
                         .IsRequired()
                         .HasMaxLength(20)

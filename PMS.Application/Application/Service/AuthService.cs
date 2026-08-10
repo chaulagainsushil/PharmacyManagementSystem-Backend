@@ -8,6 +8,7 @@ using PMS.Application.Application.Interface.Repository;
 using PMS.Application.Application.Interface.Service;
 using PMS.Common;
 using PMS.Common.DTOs;
+using PMS.Models.Enums;
 
 namespace PMS.Application.Application.Service;
 
@@ -66,8 +67,8 @@ public class AuthService : IAuthService
         // Step 4 – Link the user to the tenant via a persistent claim
         await _authRepository.AddTenantClaimAsync(identityUser, profile.TenantId);
 
-        // Step 5 – Create the initial subscription
-        await _subscriptionService.CreateInitialAsync(profile.TenantId, dto.InitialPlan);
+        // Step 5 – Create the initial subscription (always Trial for new tenants)
+        await _subscriptionService.CreateInitialAsync(profile.TenantId, PlanType.Trial);
 
         // Step 6 – Auto-login (this also creates the AppUser record)
         return await LoginAsync(new LoginDto { Email = dto.Email, Password = dto.Password });

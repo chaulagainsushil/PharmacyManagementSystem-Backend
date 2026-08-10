@@ -61,6 +61,14 @@ public class SubscriptionRepository : ISubscriptionRepository
             .FirstOrDefaultAsync(p => p.PlanType == planType);
 
     /// <inheritdoc/>
+    public async Task<SubscriptionPlanDefinition?> GetPlanDefinitionByTenantAsync(Guid tenantId)
+    {
+        var subscription = await GetActiveByTenantAsync(tenantId);
+        if (subscription is null) return null;
+        return await GetPlanDefinitionAsync(subscription.PlanType);
+    }
+
+    /// <inheritdoc/>
     public async Task<IReadOnlyList<SubscriptionPlanDefinition>> GetAllPlanDefinitionsAsync()
         => await _db.SubscriptionPlanDefinitions.ToListAsync();
 

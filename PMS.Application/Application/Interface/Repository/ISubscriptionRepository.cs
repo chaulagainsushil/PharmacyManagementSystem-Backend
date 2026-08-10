@@ -30,6 +30,12 @@ public interface ISubscriptionRepository
     /// <summary>Returns the plan definition for the given plan type.</summary>
     Task<SubscriptionPlanDefinition?> GetPlanDefinitionAsync(PlanType planType);
 
+    /// <summary>
+    /// Returns the plan definition for the active subscription of the given tenant.
+    /// Used to check feature limits (e.g. MedicineLimit) in service layer.
+    /// </summary>
+    Task<SubscriptionPlanDefinition?> GetPlanDefinitionByTenantAsync(Guid tenantId);
+
     /// <summary>Returns all plan definitions (used for seeding checks).</summary>
     Task<IReadOnlyList<SubscriptionPlanDefinition>> GetAllPlanDefinitionsAsync();
 

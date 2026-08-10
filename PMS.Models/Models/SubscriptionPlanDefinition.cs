@@ -24,4 +24,10 @@ public class SubscriptionPlanDefinition
 
     /// <summary>Human-readable description shown in billing UI.</summary>
     public string Description { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Maximum number of medicines a tenant on this plan can create.
+    /// <c>null</c> means unlimited (Silver, Gold, Diamond).
+    /// </summary>
+    public int? MedicineLimit { get; set; }
 }

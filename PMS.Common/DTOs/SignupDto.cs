@@ -1,5 +1,4 @@
 using System.ComponentModel.DataAnnotations;
-using PMS.Models.Enums;
 
 namespace PMS.Common.DTOs;
 
@@ -37,9 +36,4 @@ public class SignupDto
     /// </summary>
     [MaxLength(300)]
     public string? PharmacyName { get; set; }
-
-    /// <summary>
-    /// Subscription plan for the new tenant. Defaults to Silver when not provided.
-    /// </summary>
-    public PlanType InitialPlan { get; set; } = PlanType.Silver;
 }

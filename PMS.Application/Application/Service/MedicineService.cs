@@ -3,17 +3,25 @@ using PMS.Application.Application.Interface.Service;
 using PMS.Common;
 using PMS.Common.DTOs.Medicine;
 using PMS.Common.DTOs.Uom;
+using PMS.Models.Interfaces;
 using PMS.Models.Models;
 
 namespace PMS.Application.Application.Service;
 
 public class MedicineService : IMedicineService
 {
-    private readonly IMedicineRepository _repo;
+    private readonly IMedicineRepository    _repo;
+    private readonly ISubscriptionRepository _subscriptionRepo;
+    private readonly ITenantProvider        _tenantProvider;
 
-    public MedicineService(IMedicineRepository repo)
+    public MedicineService(
+        IMedicineRepository    repo,
+        ISubscriptionRepository subscriptionRepo,
+        ITenantProvider        tenantProvider)
     {
-        _repo = repo;
+        _repo             = repo;
+        _subscriptionRepo = subscriptionRepo;
+        _tenantProvider   = tenantProvider;
     }
 
     public async Task<IEnumerable<MedicineListItemDto>> GetAllAsync()
@@ -39,6 +47,11 @@ public class MedicineService : IMedicineService
     {
         if (await _repo.ExistsByNameAsync(dto.Name))
             return (false, $"Medicine '{dto.Name}' already exists.", null);
+
+        // Check plan medicine limit
+        var limitError = await CheckMedicineLimitAsync(1);
+        if (limitError is not null)
+            return (false, limitError, null);
 
         // Validate inline units if provided
         if (dto.Units is { Count: > 0 })
@@ -83,6 +96,23 @@ public class MedicineService : IMedicineService
         var toInsert = new List<(int Index, Medicine Entity, List<CreateMedicineUnitDto>? Units)>();
 
         var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        // Check plan medicine limit upfront for the whole batch
+        var limitError = await CheckMedicineLimitAsync(dtos.Count);
+        if (limitError is not null)
+        {
+            // Fail the entire bulk operation
+            for (int i = 0; i < dtos.Count; i++)
+                results.Add(new BulkCreateMedicineItemResultDto { Index = i, Success = false, Message = limitError });
+
+            return new BulkCreateMedicineResultDto
+            {
+                TotalRequested = dtos.Count,
+                TotalCreated   = 0,
+                TotalFailed    = dtos.Count,
+                Results        = results
+            };
+        }
 
         for (int i = 0; i < dtos.Count; i++)
         {
@@ -237,6 +267,27 @@ public class MedicineService : IMedicineService
     }
 
     // ── Validation ─────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Returns an error message if adding <paramref name="addCount"/> medicines would exceed
+    /// the plan's MedicineLimit. Returns null if the operation is allowed.
+    /// </summary>
+    private async Task<string?> CheckMedicineLimitAsync(int addCount)
+    {
+        if (!_tenantProvider.HasTenant) return null;
+
+        var plan = await _subscriptionRepo.GetPlanDefinitionByTenantAsync(_tenantProvider.TenantId);
+        if (plan?.MedicineLimit is null) return null; // unlimited
+
+        var current = await _repo.CountAsync();
+        if (current + addCount > plan.MedicineLimit)
+        {
+            return $"Your {plan.PlanType} plan allows a maximum of {plan.MedicineLimit} medicines. " +
+                   $"You currently have {current}. Please upgrade your plan to add more medicines.";
+        }
+
+        return null;
+    }
 
     private static string? ValidateInlineUnits(List<CreateMedicineUnitDto> units)
     {

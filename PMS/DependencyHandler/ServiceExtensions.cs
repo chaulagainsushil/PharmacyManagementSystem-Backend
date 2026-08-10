@@ -119,8 +119,8 @@ public static class ServiceExtensions
     }
 
     /// <summary>
-    /// Ensures SubscriptionPlanDefinition rows exist for Silver, Gold, and Diamond.
-    /// Safe to run on every startup — uses INSERT … ON CONFLICT via a check-before-insert approach.
+    /// Ensures SubscriptionPlanDefinition rows exist for Trial, Silver, Gold, and Diamond.
+    /// Safe to run on every startup — uses a check-before-insert approach.
     /// </summary>
     public static async Task SeedSubscriptionPlansAsync(this IApplicationBuilder app)
     {
@@ -135,24 +135,32 @@ public static class ServiceExtensions
         {
             new SubscriptionPlanDefinition
             {
+                PlanType       = PlanType.Trial,
+                DurationInDays = 15,
+                Price          = 0.00m,
+                Description    = "Trial — 15-day free trial, up to 20 medicines",
+                MedicineLimit  = 20
+            },
+            new SubscriptionPlanDefinition
+            {
                 PlanType       = PlanType.Silver,
                 DurationInDays = 180,
                 Price          = 999.00m,
-                Description    = "Silver — 6-month access"
+                Description    = "Silver — 6-month access, unlimited medicines"
             },
             new SubscriptionPlanDefinition
             {
                 PlanType       = PlanType.Gold,
                 DurationInDays = 365,
                 Price          = 1799.00m,
-                Description    = "Gold — 1-year access"
+                Description    = "Gold — 1-year access, unlimited medicines"
             },
             new SubscriptionPlanDefinition
             {
                 PlanType       = PlanType.Diamond,
                 DurationInDays = null,   // lifetime — EndDate will be null
                 Price          = 4999.00m,
-                Description    = "Diamond — Lifetime access, never expires"
+                Description    = "Diamond — Lifetime access, never expires, unlimited medicines"
             }
         };
 

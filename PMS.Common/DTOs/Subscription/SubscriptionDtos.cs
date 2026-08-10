@@ -24,6 +24,12 @@ public class SubscriptionResponseDto
     /// Null for Diamond plans (no expiry) or when EndDate has already passed.
     /// </summary>
     public int? DaysRemaining { get; set; }
+
+    /// <summary>
+    /// Maximum number of medicines allowed on this plan.
+    /// Null means unlimited (Silver, Gold, Diamond).
+    /// </summary>
+    public int? MedicineLimit { get; set; }
 }
 
 /// <summary>Request body for POST /api/subscription/renew</summary>

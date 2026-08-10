@@ -13,6 +13,7 @@ public interface IMedicineRepository
     Task<Medicine?> GetEntityByIdAsync(int id);
 
     Task<bool> ExistsByNameAsync(string name, int? excludeId = null);
+    Task<int> CountAsync();
     Task<Medicine> CreateAsync(Medicine medicine);
     Task<IReadOnlyList<Medicine>> CreateBulkAsync(IEnumerable<Medicine> medicines);
     Task<Medicine> UpdateAsync(Medicine medicine);
