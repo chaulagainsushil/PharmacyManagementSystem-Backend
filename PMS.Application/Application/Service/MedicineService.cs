@@ -53,13 +53,10 @@ public class MedicineService : IMedicineService
         if (limitError is not null)
             return (false, limitError, null);
 
-        // Validate inline units if provided
-        if (dto.Units is { Count: > 0 })
-        {
-            var unitError = ValidateInlineUnits(dto.Units);
-            if (unitError is not null)
-                return (false, unitError, null);
-        }
+        // Units are required — validate them
+        var unitError = ValidateInlineUnits(dto.Units);
+        if (unitError is not null)
+            return (false, unitError, null);
 
         var medicine = new Medicine
         {
@@ -67,26 +64,33 @@ public class MedicineService : IMedicineService
             GenericName          = dto.GenericName?.Trim(),
             CategoryId           = dto.CategoryId,
             ManufacturerId       = dto.ManufacturerId,
-            TabletsPerStrip      = dto.TabletsPerStrip,
-            StrapsPerBox         = dto.StrapsPerBox,
-            StripPrice           = dto.StripPrice,
-            TabletPrice          = dto.TabletPrice,
             ReorderLevel         = dto.ReorderLevel,
             RequiresPrescription = dto.RequiresPrescription,
             IsActive             = dto.IsActive,
             CreatedAt            = DateTime.UtcNow
         };
 
-        var created = await _repo.CreateAsync(medicine);
-
-        // Attach units inline if provided
-        if (dto.Units is { Count: > 0 })
+        // Build units and add to the navigation collection so EF persists
+        // the Medicine + all MedicineUnit rows in a single SaveChangesAsync.
+        foreach (var unitDto in dto.Units)
         {
-            var units = BuildMedicineUnits(created.MedicineId, dto.Units);
-            await _repo.ReplaceUnitsAsync(created.MedicineId, units);
+            medicine.Units.Add(new MedicineUnit
+            {
+                UnitOfMeasureId        = unitDto.UnitOfMeasureId,
+                ConversionFactorToBase = unitDto.IsBaseUnit ? 1m : unitDto.ConversionFactorToBase,
+                IsBaseUnit             = unitDto.IsBaseUnit,
+                IsDefault              = unitDto.IsDefault,
+                IsActive               = true,
+                CanPurchase            = unitDto.CanPurchase,
+                CanSell                = unitDto.CanSell,
+                CostPrice              = unitDto.CostPrice,
+                UnitPrice              = unitDto.UnitPrice,
+                Mrp                    = unitDto.Mrp
+            });
         }
 
-        var full = await _repo.GetByIdAsync(created.MedicineId);
+        var created = await _repo.CreateWithUnitsAsync(medicine);
+        var full    = await _repo.GetByIdAsync(created.MedicineId);
         return (true, "Medicine created successfully.", full);
     }
 
@@ -101,7 +105,6 @@ public class MedicineService : IMedicineService
         var limitError = await CheckMedicineLimitAsync(dtos.Count);
         if (limitError is not null)
         {
-            // Fail the entire bulk operation
             for (int i = 0; i < dtos.Count; i++)
                 results.Add(new BulkCreateMedicineItemResultDto { Index = i, Success = false, Message = limitError });
 
@@ -140,46 +143,60 @@ public class MedicineService : IMedicineService
                 continue;
             }
 
-            if (dto.Units is { Count: > 0 })
+            // Units are required
+            if (dto.Units is not { Count: > 0 })
             {
-                var unitError = ValidateInlineUnits(dto.Units);
-                if (unitError is not null)
-                {
-                    results.Add(new BulkCreateMedicineItemResultDto
-                        { Index = i, Success = false, Message = unitError });
-                    continue;
-                }
+                results.Add(new BulkCreateMedicineItemResultDto
+                    { Index = i, Success = false, Message = "At least one unit is required." });
+                continue;
             }
 
-            toInsert.Add((i, new Medicine
+            var unitError = ValidateInlineUnits(dto.Units);
+            if (unitError is not null)
+            {
+                results.Add(new BulkCreateMedicineItemResultDto
+                    { Index = i, Success = false, Message = unitError });
+                continue;
+            }
+
+            var entity = new Medicine
             {
                 Name                 = name,
                 GenericName          = dto.GenericName?.Trim(),
                 CategoryId           = dto.CategoryId,
                 ManufacturerId       = dto.ManufacturerId,
-                TabletsPerStrip      = dto.TabletsPerStrip,
-                StrapsPerBox         = dto.StrapsPerBox,
-                StripPrice           = dto.StripPrice,
-                TabletPrice          = dto.TabletPrice,
                 ReorderLevel         = dto.ReorderLevel,
                 RequiresPrescription = dto.RequiresPrescription,
                 IsActive             = dto.IsActive,
                 CreatedAt            = DateTime.UtcNow
-            }, dto.Units));
+            };
+
+            foreach (var unitDto in dto.Units)
+            {
+                entity.Units.Add(new MedicineUnit
+                {
+                    UnitOfMeasureId        = unitDto.UnitOfMeasureId,
+                    ConversionFactorToBase = unitDto.IsBaseUnit ? 1m : unitDto.ConversionFactorToBase,
+                    IsBaseUnit             = unitDto.IsBaseUnit,
+                    IsDefault              = unitDto.IsDefault,
+                    IsActive               = true,
+                    CanPurchase            = unitDto.CanPurchase,
+                    CanSell                = unitDto.CanSell,
+                    CostPrice              = unitDto.CostPrice,
+                    UnitPrice              = unitDto.UnitPrice,
+                    Mrp                    = unitDto.Mrp
+                });
+            }
+
+            toInsert.Add((i, entity, dto.Units));
         }
 
         if (toInsert.Count > 0)
         {
             await _repo.CreateBulkAsync(toInsert.Select(t => t.Entity).ToList());
 
-            foreach (var (idx, entity, unitDtos) in toInsert)
+            foreach (var (idx, entity, _) in toInsert)
             {
-                if (unitDtos is { Count: > 0 })
-                {
-                    var units = BuildMedicineUnits(entity.MedicineId, unitDtos);
-                    await _repo.ReplaceUnitsAsync(entity.MedicineId, units);
-                }
-
                 var full = await _repo.GetByIdAsync(entity.MedicineId);
                 results.Add(new BulkCreateMedicineItemResultDto
                 {
@@ -205,20 +222,16 @@ public class MedicineService : IMedicineService
     public async Task<(bool Success, string Message, bool IsConflict, MedicineResponseDto? Data)> UpdateAsync(
         int id, UpdateMedicineDto dto)
     {
-        // 1. Read current DTO (includes UpdatedAt)
         var existing = await _repo.GetByIdAsync(id);
         if (existing is null)
             return (false, $"Medicine with ID {id} not found.", false, null);
 
-        // 2. Optimistic concurrency check
         if (!ConcurrencyHelper.Matches(existing.UpdatedAt, dto.UpdatedAt))
             return (false, "The record was modified by another user. Please refresh and try again.", true, null);
 
-        // 3. Business rule: duplicate name
         if (await _repo.ExistsByNameAsync(dto.Name, excludeId: id))
             return (false, $"Medicine '{dto.Name}' already exists.", false, null);
 
-        // 4. Validate inline units if provided
         if (dto.Units is { Count: > 0 })
         {
             var unitError = ValidateInlineUnits(dto.Units);
@@ -226,7 +239,6 @@ public class MedicineService : IMedicineService
                 return (false, unitError, false, null);
         }
 
-        // 5. Fetch tracked entity and mutate
         var entity = await _repo.GetEntityByIdAsync(id);
         if (entity is null)
             return (false, $"Medicine with ID {id} not found.", false, null);
@@ -235,21 +247,29 @@ public class MedicineService : IMedicineService
         entity.GenericName          = dto.GenericName?.Trim();
         entity.CategoryId           = dto.CategoryId;
         entity.ManufacturerId       = dto.ManufacturerId;
-        entity.TabletsPerStrip      = dto.TabletsPerStrip;
-        entity.StrapsPerBox         = dto.StrapsPerBox;
-        entity.StripPrice           = dto.StripPrice;
-        entity.TabletPrice          = dto.TabletPrice;
         entity.ReorderLevel         = dto.ReorderLevel;
         entity.RequiresPrescription = dto.RequiresPrescription;
         entity.IsActive             = dto.IsActive;
 
         await _repo.UpdateAsync(entity);
 
-        // Replace units only when explicitly supplied
         if (dto.Units is { Count: > 0 })
         {
-            var units = BuildMedicineUnits(id, dto.Units);
-            await _repo.ReplaceUnitsAsync(id, units);
+            var newUnits = dto.Units.Select(u => new MedicineUnit
+            {
+                MedicineId             = id,
+                UnitOfMeasureId        = u.UnitOfMeasureId,
+                ConversionFactorToBase = u.IsBaseUnit ? 1m : u.ConversionFactorToBase,
+                IsBaseUnit             = u.IsBaseUnit,
+                IsDefault              = u.IsDefault,
+                IsActive               = true,
+                CanPurchase            = u.CanPurchase,
+                CanSell                = u.CanSell,
+                CostPrice              = u.CostPrice,
+                UnitPrice              = u.UnitPrice,
+                Mrp                    = u.Mrp
+            });
+            await _repo.ReplaceUnitsAsync(id, newUnits);
         }
 
         var full = await _repo.GetByIdAsync(id);
@@ -311,20 +331,12 @@ public class MedicineService : IMedicineService
         if (baseUnit.ConversionFactorToBase != 1m)
             return "The base unit must have ConversionFactorToBase = 1.";
 
+        // Validate: every unit must have a positive ConversionFactorToBase
+        var badFactor = units.FirstOrDefault(u => u.ConversionFactorToBase <= 0);
+        if (badFactor is not null)
+            return $"ConversionFactorToBase must be greater than 0 for all units. " +
+                   $"UnitOfMeasureId {badFactor.UnitOfMeasureId} has factor {badFactor.ConversionFactorToBase}.";
+
         return null;
     }
-
-    // ── Helpers ────────────────────────────────────────────────────────────────
-
-    private static List<MedicineUnit> BuildMedicineUnits(int medicineId, List<CreateMedicineUnitDto> dtos) =>
-        dtos.Select(u => new MedicineUnit
-        {
-            MedicineId             = medicineId,
-            UnitOfMeasureId        = u.UnitOfMeasureId,
-            ConversionFactorToBase = u.IsBaseUnit ? 1m : u.ConversionFactorToBase,
-            IsBaseUnit             = u.IsBaseUnit,
-            IsDefault              = u.IsDefault,
-            IsActive               = true,
-            UnitPrice              = u.UnitPrice
-        }).ToList();
 }

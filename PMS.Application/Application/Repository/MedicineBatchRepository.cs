@@ -18,16 +18,20 @@ public class MedicineBatchRepository : IMedicineBatchRepository
             .OrderBy(b => b.ExpiryDate)
             .Select(b => new MedicineBatchListItemDto
             {
-                BatchId                = b.BatchId,
-                MedicineId             = b.MedicineId,
-                MedicineName           = b.Medicine.Name,
-                BatchNumber            = b.BatchNumber,
-                SupplierName           = b.Supplier != null ? b.Supplier.Name : null,
-                ExpiryDate             = b.ExpiryDate,
-                QuantityInTablets      = b.QuantityInTablets,
-                PurchasePricePerTablet = b.PurchasePricePerTablet,
-                UpdatedAt              = b.UpdatedAt,
-                IsExpired              = b.ExpiryDate.Date < DateTime.UtcNow.Date
+                BatchId                        = b.BatchId,
+                MedicineId                     = b.MedicineId,
+                MedicineName                   = b.Medicine.Name,
+                BatchNumber                    = b.BatchNumber,
+                SupplierName                   = b.Supplier != null ? b.Supplier.Name : null,
+                ExpiryDate                     = b.ExpiryDate,
+                QuantityInBaseUnit             = b.QuantityInBaseUnit,
+                CostPricePerBaseUnit           = b.CostPricePerBaseUnit,
+                PurchaseUnitName               = b.PurchaseMedicineUnit != null
+                                                     ? b.PurchaseMedicineUnit.UnitOfMeasure.Name
+                                                     : null,
+                PurchaseQuantityInPurchaseUnit = b.PurchaseQuantityInPurchaseUnit,
+                UpdatedAt                      = b.UpdatedAt,
+                IsExpired                      = b.ExpiryDate.Date < DateTime.UtcNow.Date
             })
             .ToListAsync();
 
@@ -38,16 +42,20 @@ public class MedicineBatchRepository : IMedicineBatchRepository
             .OrderBy(b => b.ExpiryDate)
             .Select(b => new MedicineBatchListItemDto
             {
-                BatchId                = b.BatchId,
-                MedicineId             = b.MedicineId,
-                MedicineName           = b.Medicine.Name,
-                BatchNumber            = b.BatchNumber,
-                SupplierName           = b.Supplier != null ? b.Supplier.Name : null,
-                ExpiryDate             = b.ExpiryDate,
-                QuantityInTablets      = b.QuantityInTablets,
-                PurchasePricePerTablet = b.PurchasePricePerTablet,
-                UpdatedAt              = b.UpdatedAt,
-                IsExpired              = b.ExpiryDate.Date < DateTime.UtcNow.Date
+                BatchId                        = b.BatchId,
+                MedicineId                     = b.MedicineId,
+                MedicineName                   = b.Medicine.Name,
+                BatchNumber                    = b.BatchNumber,
+                SupplierName                   = b.Supplier != null ? b.Supplier.Name : null,
+                ExpiryDate                     = b.ExpiryDate,
+                QuantityInBaseUnit             = b.QuantityInBaseUnit,
+                CostPricePerBaseUnit           = b.CostPricePerBaseUnit,
+                PurchaseUnitName               = b.PurchaseMedicineUnit != null
+                                                     ? b.PurchaseMedicineUnit.UnitOfMeasure.Name
+                                                     : null,
+                PurchaseQuantityInPurchaseUnit = b.PurchaseQuantityInPurchaseUnit,
+                UpdatedAt                      = b.UpdatedAt,
+                IsExpired                      = b.ExpiryDate.Date < DateTime.UtcNow.Date
             })
             .ToListAsync();
 
@@ -57,19 +65,24 @@ public class MedicineBatchRepository : IMedicineBatchRepository
             .Where(b => b.BatchId == id)
             .Select(b => new MedicineBatchResponseDto
             {
-                BatchId                = b.BatchId,
-                MedicineId             = b.MedicineId,
-                MedicineName           = b.Medicine.Name,
-                BatchNumber            = b.BatchNumber,
-                SupplierId             = b.SupplierId,
-                SupplierName           = b.Supplier != null ? b.Supplier.Name : null,
-                ManufactureDate        = b.ManufactureDate,
-                ExpiryDate             = b.ExpiryDate,
-                QuantityInTablets      = b.QuantityInTablets,
-                PurchasePricePerTablet = b.PurchasePricePerTablet,
-                ReceivedDate           = b.ReceivedDate,
-                UpdatedAt              = b.UpdatedAt,
-                IsExpired              = b.ExpiryDate.Date < DateTime.UtcNow.Date
+                BatchId                        = b.BatchId,
+                MedicineId                     = b.MedicineId,
+                MedicineName                   = b.Medicine.Name,
+                BatchNumber                    = b.BatchNumber,
+                SupplierId                     = b.SupplierId,
+                SupplierName                   = b.Supplier != null ? b.Supplier.Name : null,
+                ManufactureDate                = b.ManufactureDate,
+                ExpiryDate                     = b.ExpiryDate,
+                QuantityInBaseUnit             = b.QuantityInBaseUnit,
+                CostPricePerBaseUnit           = b.CostPricePerBaseUnit,
+                PurchaseMedicineUnitId         = b.PurchaseMedicineUnitId,
+                PurchaseUnitName               = b.PurchaseMedicineUnit != null
+                                                     ? b.PurchaseMedicineUnit.UnitOfMeasure.Name
+                                                     : null,
+                PurchaseQuantityInPurchaseUnit = b.PurchaseQuantityInPurchaseUnit,
+                ReceivedDate                   = b.ReceivedDate,
+                UpdatedAt                      = b.UpdatedAt,
+                IsExpired                      = b.ExpiryDate.Date < DateTime.UtcNow.Date
             })
             .FirstOrDefaultAsync();
 
@@ -109,19 +122,56 @@ public class MedicineBatchRepository : IMedicineBatchRepository
             .AsNoTracking()
             .Where(b => b.ExpiryDate.Date > DateTime.UtcNow.Date
                      && b.ExpiryDate.Date <= DateTime.UtcNow.Date.AddDays(days)
-                     && b.QuantityInTablets > 0)
+                     && b.QuantityInBaseUnit > 0)
             .OrderBy(b => b.ExpiryDate)
             .Select(b => new MedicineBatchListItemDto
             {
-                BatchId                = b.BatchId,
-                MedicineId             = b.MedicineId,
-                MedicineName           = b.Medicine.Name,
-                BatchNumber            = b.BatchNumber,
-                SupplierName           = b.Supplier != null ? b.Supplier.Name : null,
-                ExpiryDate             = b.ExpiryDate,
-                QuantityInTablets      = b.QuantityInTablets,
-                PurchasePricePerTablet = b.PurchasePricePerTablet,
-                IsExpired              = false  // near-expiry batches are not yet expired
+                BatchId                        = b.BatchId,
+                MedicineId                     = b.MedicineId,
+                MedicineName                   = b.Medicine.Name,
+                BatchNumber                    = b.BatchNumber,
+                SupplierName                   = b.Supplier != null ? b.Supplier.Name : null,
+                ExpiryDate                     = b.ExpiryDate,
+                QuantityInBaseUnit             = b.QuantityInBaseUnit,
+                CostPricePerBaseUnit           = b.CostPricePerBaseUnit,
+                PurchaseUnitName               = b.PurchaseMedicineUnit != null
+                                                     ? b.PurchaseMedicineUnit.UnitOfMeasure.Name
+                                                     : null,
+                PurchaseQuantityInPurchaseUnit = b.PurchaseQuantityInPurchaseUnit,
+                IsExpired                      = false  // near-expiry batches are not yet expired
             })
             .ToListAsync();
+
+    /// <summary>
+    /// Fetches the MedicineUnit with its conversion factor — used during batch creation
+    /// to resolve quantity and cost price when purchasing in a non-base unit.
+    /// Returns null if the unit is not found or does not belong to the medicine.
+    /// </summary>
+    public async Task<MedicineUnit?> GetPurchaseUnitAsync(int medicineId, int medicineUnitId) =>
+        await _db.MedicineUnits
+            .AsNoTracking()
+            .Where(mu => mu.MedicineUnitId == medicineUnitId
+                      && mu.MedicineId == medicineId
+                      && mu.IsActive)
+            .Select(mu => new MedicineUnit
+            {
+                MedicineUnitId         = mu.MedicineUnitId,
+                MedicineId             = mu.MedicineId,
+                UnitOfMeasureId        = mu.UnitOfMeasureId,
+                ConversionFactorToBase = mu.ConversionFactorToBase,
+                IsBaseUnit             = mu.IsBaseUnit,
+                CanPurchase            = mu.CanPurchase,
+                CanSell                = mu.CanSell,
+                CostPrice              = mu.CostPrice,
+                UnitPrice              = mu.UnitPrice,
+                Mrp                    = mu.Mrp,
+                IsActive               = mu.IsActive,
+                UnitOfMeasure = new UnitOfMeasure
+                {
+                    UnitOfMeasureId = mu.UnitOfMeasure.UnitOfMeasureId,
+                    Name            = mu.UnitOfMeasure.Name,
+                    Symbol          = mu.UnitOfMeasure.Symbol
+                }
+            })
+            .FirstOrDefaultAsync();
 }

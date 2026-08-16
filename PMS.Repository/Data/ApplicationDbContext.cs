@@ -60,6 +60,10 @@ public class ApplicationDbContext : IdentityDbContext<IdentityUser>
     public DbSet<Subscription> Subscriptions => Set<Subscription>();
     public DbSet<SubscriptionPlanDefinition> SubscriptionPlanDefinitions => Set<SubscriptionPlanDefinition>();
 
+    // ── Generic Product & ProductUnit ─────────────────────────────────────────
+    public DbSet<Product> Products => Set<Product>();
+    public DbSet<ProductUnit> ProductUnits => Set<ProductUnit>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -111,7 +115,11 @@ public class ApplicationDbContext : IdentityDbContext<IdentityUser>
         {
             e.HasKey(mu => mu.MedicineUnitId);
             e.Property(mu => mu.ConversionFactorToBase).HasColumnType("numeric(18,6)");
+            e.Property(mu => mu.CostPrice).HasColumnType("numeric(18,4)");
             e.Property(mu => mu.UnitPrice).HasColumnType("numeric(18,4)");
+            e.Property(mu => mu.Mrp).HasColumnType("numeric(18,4)");
+            e.Property(mu => mu.CanPurchase).HasDefaultValue(false);
+            e.Property(mu => mu.CanSell).HasDefaultValue(true);
             e.Property(mu => mu.TenantId).IsRequired();
 
             // Each (Medicine, UoM) pair is unique — no duplicate units per medicine
@@ -138,6 +146,12 @@ public class ApplicationDbContext : IdentityDbContext<IdentityUser>
                 .WithMany(u => u.MedicineUnits)
                 .HasForeignKey(mu => mu.UnitOfMeasureId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            // PurchasedBatches is the inverse of MedicineBatch.PurchaseMedicineUnit
+            e.HasMany(mu => mu.PurchasedBatches)
+                .WithOne(b => b.PurchaseMedicineUnit)
+                .HasForeignKey(b => b.PurchaseMedicineUnitId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         // ── Medicine ─────────────────────────────────────────────────────────
@@ -146,13 +160,10 @@ public class ApplicationDbContext : IdentityDbContext<IdentityUser>
             e.HasKey(m => m.MedicineId);
             e.Property(m => m.Name).IsRequired().HasMaxLength(300);
             e.Property(m => m.GenericName).HasMaxLength(300);
-            e.Property(m => m.StripPrice).HasColumnType("numeric(18,4)");
-            e.Property(m => m.TabletPrice).HasColumnType("numeric(18,4)");
             e.Property(m => m.TenantId).IsRequired();
 
             // Ignore computed properties — not mapped to columns
-            e.Ignore(m => m.TotalStockInTablets);
-            e.Ignore(m => m.TotalTabletsPerBox);
+            e.Ignore(m => m.TotalStockInBaseUnit);
 
             e.HasOne(m => m.Category)
                 .WithMany(c => c.Medicines)
@@ -170,15 +181,15 @@ public class ApplicationDbContext : IdentityDbContext<IdentityUser>
         {
             e.HasKey(b => b.BatchId);
             e.Property(b => b.BatchNumber).IsRequired().HasMaxLength(100);
-            e.Property(b => b.PurchasePricePerTablet).HasColumnType("numeric(18,4)");
+            e.Property(b => b.CostPricePerBaseUnit).HasColumnType("numeric(18,4)");
             e.Property(b => b.TenantId).IsRequired();
 
             e.Ignore(b => b.IsExpired);
 
             // Enforce non-negative stock at the database level
             e.ToTable(t => t.HasCheckConstraint(
-                "CK_MedicineBatches_QuantityInTablets_NonNegative",
-                "\"QuantityInTablets\" >= 0"));
+                "CK_MedicineBatches_QuantityInBaseUnit_NonNegative",
+                "\"QuantityInBaseUnit\" >= 0"));
 
             e.HasOne(b => b.Medicine)
                 .WithMany(m => m.Batches)
@@ -189,6 +200,9 @@ public class ApplicationDbContext : IdentityDbContext<IdentityUser>
                 .WithMany(s => s.Batches)
                 .HasForeignKey(b => b.SupplierId)
                 .OnDelete(DeleteBehavior.SetNull);
+
+            // Optional FK: the MedicineUnit in which this batch was purchased
+            // Configured on the MedicineUnit side (HasMany/WithOne) above.
         });
 
         // ── Customer ──────────────────────────────────────────────────────────
@@ -369,6 +383,43 @@ public class ApplicationDbContext : IdentityDbContext<IdentityUser>
                 .HasForeignKey(s => s.TenantId)
                 .HasPrincipalKey(p => p.TenantId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── Product ────────────────────────────────────────────────────────────
+        modelBuilder.Entity<Product>(e =>
+        {
+            e.HasKey(p => p.ProductId);
+            e.Property(p => p.Name).IsRequired().HasMaxLength(300);
+            e.Property(p => p.Description).HasMaxLength(1000);
+            e.Property(p => p.TenantId).IsRequired();
+            e.Property(p => p.CreatedAt).HasDefaultValueSql("now()");
+
+            e.HasMany(p => p.Units)
+                .WithOne(pu => pu.Product)
+                .HasForeignKey(pu => pu.ProductId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── ProductUnit ────────────────────────────────────────────────────────
+        modelBuilder.Entity<ProductUnit>(e =>
+        {
+            e.HasKey(pu => pu.ProductUnitId);
+            e.Property(pu => pu.TenantId).IsRequired();
+            e.Property(pu => pu.ConversionFactorToBase).HasColumnType("numeric(18,6)");
+            e.Property(pu => pu.TotalUnitQty).HasColumnType("numeric(18,6)");
+            e.Property(pu => pu.PurchasePrice).HasColumnType("numeric(18,4)");
+            e.Property(pu => pu.SalePrice).HasColumnType("numeric(18,4)");
+
+            // Unique index on (ProductId, UnitOfMeasureId) — no duplicate units per product
+            e.HasIndex(pu => new { pu.ProductId, pu.UnitOfMeasureId })
+                .IsUnique()
+                .HasDatabaseName("IX_ProductUnit_ProductId_UnitOfMeasureId");
+
+            // Foreign key to UnitOfMeasure
+            e.HasOne(pu => pu.UnitOfMeasure)
+                .WithMany(u => u.ProductUnits)
+                .HasForeignKey(pu => pu.UnitOfMeasureId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
     }
 

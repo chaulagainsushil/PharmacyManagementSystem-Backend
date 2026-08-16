@@ -85,7 +85,7 @@ public class ReportRepository : IReportRepository
                 m.ReorderLevel,
                 CategoryName     = m.Category != null ? m.Category.CategoryName : null,
                 ManufacturerName = m.Manufacturer != null ? m.Manufacturer.Name : null,
-                TotalStock       = m.Batches.Sum(b => (int?)b.QuantityInTablets) ?? 0
+                TotalStock       = m.Batches.Sum(b => (int?)b.QuantityInBaseUnit) ?? 0
             })
             .Where(m => m.TotalStock <= m.ReorderLevel)
             .OrderBy(m => m.TotalStock)
@@ -213,7 +213,7 @@ public class ReportRepository : IReportRepository
                 SupplierId           = g.Key.SupplierId!.Value,
                 SupplierName         = g.Key.Name,
                 TotalBatchesSupplied = g.Count(),
-                TotalTabletsSupplied = g.Sum(b => b.QuantityInTablets),
+                TotalTabletsSupplied = g.Sum(b => b.QuantityInBaseUnit),
             })
             .OrderByDescending(x => x.TotalTabletsSupplied)
             .Take(top)

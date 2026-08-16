@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using PMS.Application.Application.Interface.Service;
 using PMS.Common;
 using PMS.Common.DTOs.Medicine;
+using PMS.Common.DTOs.Uom;
 
 namespace PMS.Controllers;
 
@@ -148,5 +149,51 @@ public class MedicineController : ControllerBase
 
         var url = $"/prescriptions/{fileName}";
         return Ok(new { url, fileName });
+    }
+
+    // ── Medicine Unit endpoints (convenience endpoints for dual-unit attach) ─────
+
+    /// <summary>
+    /// Attach a base unit and optionally a sub unit to a medicine in one call.
+    /// When UseAutoCalculatedPrice=true, the sub-unit's selling price is computed
+    /// server-side as BaseUnit.UnitPrice / SubUnit.ConversionFactorToBase.
+    /// </summary>
+    [HttpPost("{medicineId:int}/units")]
+    [Authorize(Roles = $"{AppRoles.SystemAdmin},{AppRoles.PharmacyAdmin},{AppRoles.Pharmacist}")]
+    [ProducesResponseType(typeof(IReadOnlyList<MedicineUnitDto>), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> AddDualUnit(int medicineId, [FromBody] AddDualUnitCommand cmd)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        var medicineUnitService = HttpContext.RequestServices.GetRequiredService<IMedicineUnitService>();
+        var (success, message, data) = await medicineUnitService.AddDualUnitAsync(medicineId, cmd);
+
+        if (!success)
+        {
+            if (message.Contains("not found"))
+                return NotFound(new { message });
+            return BadRequest(new { message });
+        }
+
+        return StatusCode(StatusCodes.Status201Created, data);
+    }
+
+    /// <summary>
+    /// Get all units for a medicine with TotalInBaseUnits (medicine's total stock expressed in each unit's terms).
+    /// </summary>
+    [HttpGet("{medicineId:int}/units")]
+    [ProducesResponseType(typeof(MedicineUnitsWithTotalsResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetUnitsWithTotals(int medicineId)
+    {
+        var medicineUnitService = HttpContext.RequestServices.GetRequiredService<IMedicineUnitService>();
+        var (found, data) = await medicineUnitService.GetUnitsWithTotalsAsync(medicineId);
+
+        if (!found)
+            return NotFound(new { message = $"Medicine with ID {medicineId} not found." });
+
+        return Ok(data);
     }
 }

@@ -23,4 +23,5 @@ public class UnitOfMeasure : IHasTenant
 
     // Navigation
     public ICollection<MedicineUnit> MedicineUnits { get; set; } = new List<MedicineUnit>();
+    public ICollection<ProductUnit> ProductUnits { get; set; } = new List<ProductUnit>();
 }

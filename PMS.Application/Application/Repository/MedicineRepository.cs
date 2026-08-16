@@ -28,14 +28,19 @@ public class MedicineRepository : IMedicineRepository
                 GenericName          = m.GenericName,
                 CategoryName         = m.Category != null ? m.Category.CategoryName : null,
                 ManufacturerName     = m.Manufacturer != null ? m.Manufacturer.Name : null,
-                TabletsPerStrip      = m.TabletsPerStrip,
-                StrapsPerBox         = m.StrapsPerBox,
-                TotalTabletsPerBox   = m.TabletsPerStrip * m.StrapsPerBox,
-                StripPrice           = m.StripPrice,
-                TabletPrice          = m.TabletPrice,
-                TotalStockInTablets  = m.Batches.Sum(b => b.QuantityInTablets),
+                TotalStockInBaseUnit = m.Batches.Sum(b => b.QuantityInBaseUnit),
+                ReorderLevel         = m.ReorderLevel,
                 IsActive             = m.IsActive,
-                RequiresPrescription = m.RequiresPrescription
+                RequiresPrescription = m.RequiresPrescription,
+                UpdatedAt            = m.UpdatedAt,
+                DefaultUnitName      = m.Units
+                    .Where(u => u.IsDefault && u.IsActive)
+                    .Select(u => u.UnitOfMeasure.Name)
+                    .FirstOrDefault(),
+                DefaultUnitPrice     = m.Units
+                    .Where(u => u.IsDefault && u.IsActive)
+                    .Select(u => (decimal?)u.UnitPrice)
+                    .FirstOrDefault()
             })
             .ToListAsync();
     }
@@ -58,14 +63,19 @@ public class MedicineRepository : IMedicineRepository
                 GenericName          = m.GenericName,
                 CategoryName         = m.Category != null ? m.Category.CategoryName : null,
                 ManufacturerName     = m.Manufacturer != null ? m.Manufacturer.Name : null,
-                TabletsPerStrip      = m.TabletsPerStrip,
-                StrapsPerBox         = m.StrapsPerBox,
-                TotalTabletsPerBox   = m.TabletsPerStrip * m.StrapsPerBox,
-                StripPrice           = m.StripPrice,
-                TabletPrice          = m.TabletPrice,
-                TotalStockInTablets  = m.Batches.Sum(b => b.QuantityInTablets),
+                TotalStockInBaseUnit = m.Batches.Sum(b => b.QuantityInBaseUnit),
+                ReorderLevel         = m.ReorderLevel,
                 IsActive             = m.IsActive,
-                RequiresPrescription = m.RequiresPrescription
+                RequiresPrescription = m.RequiresPrescription,
+                UpdatedAt            = m.UpdatedAt,
+                DefaultUnitName      = m.Units
+                    .Where(u => u.IsDefault && u.IsActive)
+                    .Select(u => u.UnitOfMeasure.Name)
+                    .FirstOrDefault(),
+                DefaultUnitPrice     = m.Units
+                    .Where(u => u.IsDefault && u.IsActive)
+                    .Select(u => (decimal?)u.UnitPrice)
+                    .FirstOrDefault()
             })
             .ToListAsync();
     }
@@ -84,15 +94,10 @@ public class MedicineRepository : IMedicineRepository
                 CategoryName         = m.Category != null ? m.Category.CategoryName : null,
                 ManufacturerId       = m.ManufacturerId,
                 ManufacturerName     = m.Manufacturer != null ? m.Manufacturer.Name : null,
-                TabletsPerStrip      = m.TabletsPerStrip,
-                StrapsPerBox         = m.StrapsPerBox,
-                TotalTabletsPerBox   = m.TabletsPerStrip * m.StrapsPerBox,
-                StripPrice           = m.StripPrice,
-                TabletPrice          = m.TabletPrice,
                 ReorderLevel         = m.ReorderLevel,
                 RequiresPrescription = m.RequiresPrescription,
                 IsActive             = m.IsActive,
-                TotalStockInTablets  = m.Batches.Sum(b => b.QuantityInTablets),
+                TotalStockInBaseUnit = m.Batches.Sum(b => b.QuantityInBaseUnit),
                 CreatedAt            = m.CreatedAt,
                 UpdatedAt            = m.UpdatedAt,
                 Units = m.Units
@@ -109,7 +114,11 @@ public class MedicineRepository : IMedicineRepository
                         IsBaseUnit             = u.IsBaseUnit,
                         IsDefault              = u.IsDefault,
                         IsActive               = u.IsActive,
+                        CanPurchase            = u.CanPurchase,
+                        CanSell                = u.CanSell,
+                        CostPrice              = u.CostPrice,
                         UnitPrice              = u.UnitPrice,
+                        Mrp                    = u.Mrp,
                         UpdatedAt              = u.UpdatedAt
                     })
                     .ToList()
@@ -136,6 +145,20 @@ public class MedicineRepository : IMedicineRepository
 
     public async Task<Medicine> CreateAsync(Medicine medicine)
     {
+        _db.Medicines.Add(medicine);
+        await _db.SaveChangesAsync();
+        return medicine;
+    }
+
+    /// <summary>
+    /// Persists the medicine and all rows in <see cref="Medicine.Units"/> in a single
+    /// <see cref="Microsoft.EntityFrameworkCore.DbContext.SaveChangesAsync"/> call so the
+    /// operation is atomic — either both the Medicine and its units are written or neither is.
+    /// </summary>
+    public async Task<Medicine> CreateWithUnitsAsync(Medicine medicine)
+    {
+        // Adding the aggregate root is enough: EF Core will track the Units
+        // collection via the navigation property and INSERT them in the same transaction.
         _db.Medicines.Add(medicine);
         await _db.SaveChangesAsync();
         return medicine;

@@ -42,10 +42,25 @@ public class SaleService : ISaleService
                     $"MedicineUnit {itemDto.MedicineUnitId} is not attached to medicine '{medicine.Name}'.",
                     null);
 
-            var baseUnitsRequested = medicine.ConvertToBaseQuantity(itemDto.MedicineUnitId, itemDto.Quantity);
-            var unitPrice          = saleUnit.UnitPrice;
+            // ── CanSell validation ──────────────────────────────────────────
+            if (!saleUnit.CanSell)
+                return (false,
+                    $"Unit '{saleUnit.UnitOfMeasure?.Name ?? saleUnit.MedicineUnitId.ToString()}' " +
+                    $"is not marked as sellable (CanSell = false) for medicine '{medicine.Name}'. " +
+                    "Use a unit that is enabled for sales.",
+                    null);
 
-            var totalAvailable = medicine.Batches.Sum(b => b.QuantityInTablets);
+            // ── Active check ────────────────────────────────────────────────
+            if (!saleUnit.IsActive)
+                return (false,
+                    $"Unit '{saleUnit.UnitOfMeasure?.Name ?? saleUnit.MedicineUnitId.ToString()}' " +
+                    $"is inactive for medicine '{medicine.Name}' and cannot be used for sales.",
+                    null);
+
+            var baseUnitsRequested = medicine.ConvertToBaseQuantity(itemDto.MedicineUnitId, itemDto.Quantity);
+            var unitPrice          = saleUnit.UnitPrice;   // selling price, not cost price
+
+            var totalAvailable = medicine.Batches.Sum(b => b.QuantityInBaseUnit);
             if (totalAvailable < baseUnitsRequested)
                 return (false,
                     $"Insufficient stock for '{medicine.Name}'. " +
@@ -58,7 +73,7 @@ public class SaleService : ISaleService
             {
                 if (remaining <= 0) break;
 
-                var takeFromBatch    = Math.Min(remaining, batch.QuantityInTablets);
+                var takeFromBatch    = Math.Min(remaining, batch.QuantityInBaseUnit);
                 remaining -= takeFromBatch;
 
                 var customerUnitsTaken = takeFromBatch / saleUnit.ConversionFactorToBase;

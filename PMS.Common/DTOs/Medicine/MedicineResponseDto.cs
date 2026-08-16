@@ -15,17 +15,13 @@ public class MedicineResponseDto
     public int? ManufacturerId { get; set; }
     public string? ManufacturerName { get; set; }
 
-    public int TabletsPerStrip { get; set; }
-    public int StrapsPerBox { get; set; }
-    public int TotalTabletsPerBox { get; set; }
-    public decimal StripPrice { get; set; }
-    public decimal TabletPrice { get; set; }
-
     public int ReorderLevel { get; set; }
     public bool RequiresPrescription { get; set; }
     public bool IsActive { get; set; }
 
-    public int TotalStockInTablets { get; set; }
+    /// <summary>Total stock across all non-expired batches, expressed in the medicine's base unit.</summary>
+    public int TotalStockInBaseUnit { get; set; }
+
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 

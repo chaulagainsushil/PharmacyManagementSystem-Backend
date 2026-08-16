@@ -12,20 +12,14 @@ public class MedicineBatchService : IMedicineBatchService
 
     public MedicineBatchService(IMedicineBatchRepository repo) => _repo = repo;
 
-    public async Task<IEnumerable<MedicineBatchListItemDto>> GetAllAsync()
-    {
-        return await _repo.GetAllAsync();
-    }
+    public async Task<IEnumerable<MedicineBatchListItemDto>> GetAllAsync() =>
+        await _repo.GetAllAsync();
 
-    public async Task<IEnumerable<MedicineBatchListItemDto>> GetByMedicineIdAsync(int medicineId)
-    {
-        return await _repo.GetByMedicineIdAsync(medicineId);
-    }
+    public async Task<IEnumerable<MedicineBatchListItemDto>> GetByMedicineIdAsync(int medicineId) =>
+        await _repo.GetByMedicineIdAsync(medicineId);
 
-    public async Task<MedicineBatchResponseDto?> GetByIdAsync(int id)
-    {
-        return await _repo.GetByIdAsync(id);
-    }
+    public async Task<MedicineBatchResponseDto?> GetByIdAsync(int id) =>
+        await _repo.GetByIdAsync(id);
 
     public async Task<(bool Success, string Message, MedicineBatchResponseDto? Data)> CreateAsync(
         CreateMedicineBatchDto dto)
@@ -36,16 +30,62 @@ public class MedicineBatchService : IMedicineBatchService
         if (dto.ExpiryDate.Date <= DateTime.UtcNow.Date)
             return (false, "Expiry date must be in the future.", null);
 
+        int    quantityInBaseUnit;
+        decimal costPricePerBaseUnit;
+        int?   purchaseMedicineUnitId        = null;
+        int?   purchaseQuantityInPurchaseUnit = null;
+
+        if (dto.PurchaseMedicineUnitId.HasValue)
+        {
+            // ── Unit-aware mode: validate the unit and convert ────────────────
+            var purchaseUnit = await _repo.GetPurchaseUnitAsync(
+                dto.MedicineId, dto.PurchaseMedicineUnitId.Value);
+
+            if (purchaseUnit is null)
+                return (false,
+                    $"MedicineUnit {dto.PurchaseMedicineUnitId.Value} was not found, " +
+                    "is inactive, or does not belong to this medicine.", null);
+
+            if (!purchaseUnit.CanPurchase)
+                return (false,
+                    $"Unit '{purchaseUnit.UnitOfMeasure?.Name ?? purchaseUnit.MedicineUnitId.ToString()}' " +
+                    "is not marked as purchasable (CanPurchase = false). " +
+                    "Enable CanPurchase on this unit or choose a different unit.", null);
+
+            // Convert purchase quantity → base units
+            // ConversionFactorToBase = how many base units are in 1 purchase unit
+            // e.g. 1 Strip = 10 Tablets → factor = 10 → 50 Strips × 10 = 500 Tablets
+            quantityInBaseUnit = (int)Math.Round(
+                dto.PurchaseQuantity * purchaseUnit.ConversionFactorToBase);
+
+            // Derive cost per base unit from cost per purchase unit
+            // e.g. Rs 18 per Strip ÷ 10 = Rs 1.80 per Tablet
+            costPricePerBaseUnit = purchaseUnit.ConversionFactorToBase > 0
+                ? dto.CostPricePerPurchaseUnit / purchaseUnit.ConversionFactorToBase
+                : 0m;
+
+            purchaseMedicineUnitId        = dto.PurchaseMedicineUnitId.Value;
+            purchaseQuantityInPurchaseUnit = dto.PurchaseQuantity;
+        }
+        else
+        {
+            // ── Base-unit mode: quantity and cost are already in base units ───
+            quantityInBaseUnit   = dto.PurchaseQuantity;
+            costPricePerBaseUnit = dto.CostPricePerBaseUnit;
+        }
+
         var batch = new MedicineBatch
         {
-            MedicineId              = dto.MedicineId,
-            BatchNumber             = dto.BatchNumber.Trim(),
-            SupplierId              = dto.SupplierId,
-            ManufactureDate         = dto.ManufactureDate,
-            ExpiryDate              = dto.ExpiryDate,
-            QuantityInTablets       = dto.QuantityInTablets,
-            PurchasePricePerTablet  = dto.PurchasePricePerTablet,
-            ReceivedDate            = dto.ReceivedDate == default ? DateTime.UtcNow : dto.ReceivedDate
+            MedicineId                   = dto.MedicineId,
+            BatchNumber                  = dto.BatchNumber.Trim(),
+            SupplierId                   = dto.SupplierId,
+            ManufactureDate              = dto.ManufactureDate,
+            ExpiryDate                   = dto.ExpiryDate,
+            QuantityInBaseUnit           = quantityInBaseUnit,
+            CostPricePerBaseUnit         = costPricePerBaseUnit,
+            PurchaseMedicineUnitId       = purchaseMedicineUnitId,
+            PurchaseQuantityInPurchaseUnit = purchaseQuantityInPurchaseUnit,
+            ReceivedDate                 = dto.ReceivedDate == default ? DateTime.UtcNow : dto.ReceivedDate
         };
 
         var created = await _repo.CreateAsync(batch);
@@ -74,12 +114,12 @@ public class MedicineBatchService : IMedicineBatchService
         if (entity is null)
             return (false, $"Medicine batch with ID {id} not found.", false, null);
 
-        entity.BatchNumber            = dto.BatchNumber.Trim();
-        entity.SupplierId             = dto.SupplierId;
-        entity.ManufactureDate        = dto.ManufactureDate;
-        entity.ExpiryDate             = dto.ExpiryDate;
-        entity.QuantityInTablets      = dto.QuantityInTablets;
-        entity.PurchasePricePerTablet = dto.PurchasePricePerTablet;
+        entity.BatchNumber          = dto.BatchNumber.Trim();
+        entity.SupplierId           = dto.SupplierId;
+        entity.ManufactureDate      = dto.ManufactureDate;
+        entity.ExpiryDate           = dto.ExpiryDate;
+        entity.QuantityInBaseUnit   = dto.QuantityInBaseUnit;
+        entity.CostPricePerBaseUnit = dto.CostPricePerBaseUnit;
 
         await _repo.UpdateAsync(entity);
 
@@ -124,8 +164,6 @@ public class MedicineBatchService : IMedicineBatchService
         return (true, "Medicine batch deleted successfully.");
     }
 
-    public async Task<IEnumerable<MedicineBatchListItemDto>> GetNearExpiryAsync(int days = 45)
-    {
-        return await _repo.GetNearExpiryAsync(days);
-    }
+    public async Task<IEnumerable<MedicineBatchListItemDto>> GetNearExpiryAsync(int days = 45) =>
+        await _repo.GetNearExpiryAsync(days);
 }

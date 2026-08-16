@@ -29,10 +29,10 @@ public class DisposalService : IDisposalService
             if (batch is null)
                 return (false, $"Batch with ID {itemDto.BatchId} not found.", null);
 
-            if (itemDto.QuantityInTablets > batch.QuantityInTablets)
+            if (itemDto.QuantityInTablets > batch.QuantityInBaseUnit)
                 return (false,
-                    $"Cannot dispose {itemDto.QuantityInTablets} tablets from batch '{batch.BatchNumber}' " +
-                    $"— only {batch.QuantityInTablets} available.",
+                    $"Cannot dispose {itemDto.QuantityInTablets} base units from batch '{batch.BatchNumber}' " +
+                    $"— only {batch.QuantityInBaseUnit} available.",
                     null);
 
             plannedItems.Add(new ExpiredMedicineDisposalItem

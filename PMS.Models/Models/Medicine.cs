@@ -12,21 +12,6 @@ public class Medicine : IHasTenant
     public int? CategoryId { get; set; }
     public int? ManufacturerId { get; set; }
 
-    // ── Legacy fields kept for backwards-compatibility with existing batch data ──
-    // Stock is always stored in base-unit (tablet/piece) quantities in MedicineBatch.
-    // These fields now drive the default MedicineUnit seeding during migration.
-    public int TabletsPerStrip { get; set; } = 1;
-
-    /// <summary>How many strips/straps are packed in one box.</summary>
-    public int StrapsPerBox { get; set; } = 1;
-
-    /// <summary>Computed: total base-units that fit in one box.</summary>
-    public int TotalTabletsPerBox => TabletsPerStrip * StrapsPerBox;
-
-    // ── Legacy pricing — still used by MedicineUnit.UnitPrice seeding ──────────
-    public decimal StripPrice { get; set; }
-    public decimal TabletPrice { get; set; }
-
     public int ReorderLevel { get; set; } = 10;
     public bool RequiresPrescription { get; set; } = false;
     public bool IsActive { get; set; } = true;
@@ -42,13 +27,11 @@ public class Medicine : IHasTenant
 
     // ── Domain helpers ─────────────────────────────────────────────────────────
 
-    /// <summary>Total stock across all batches, in base units.</summary>
-    public int TotalStockInTablets => Batches?.Sum(b => b.QuantityInTablets) ?? 0;
+    /// <summary>Total stock across all batches, in base units (computed — not mapped to DB).</summary>
+    public int TotalStockInBaseUnit => Batches?.Sum(b => b.QuantityInBaseUnit) ?? 0;
 
     /// <summary>
     /// Convert a quantity in the given <paramref name="medicineUnitId"/> to base-unit quantity.
-    /// Throws <see cref="InvalidOperationException"/> if the unit is not found on this medicine
-    /// or if <see cref="Units"/> has not been loaded.
     /// </summary>
     public int ConvertToBaseQuantity(int medicineUnitId, int quantity)
     {
@@ -61,7 +44,7 @@ public class Medicine : IHasTenant
     }
 
     /// <summary>
-    /// Returns the price for the given MedicineUnit, falling back to the unit's stored price.
+    /// Returns the selling price for the given MedicineUnit.
     /// </summary>
     public decimal GetUnitPrice(int medicineUnitId)
     {
@@ -85,7 +68,6 @@ public class Medicine : IHasTenant
             ?? throw new InvalidOperationException(
                 $"MedicineUnit {medicineUnitId} not found on Medicine {MedicineId}.");
 
-        // Base unit must have conversion factor of 1
         target.ConversionFactorToBase = 1m;
     }
 

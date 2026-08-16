@@ -26,8 +26,6 @@ public class SaleRepository : ISaleRepository
             {
                 MedicineId      = m.MedicineId,
                 Name            = m.Name,
-                TabletsPerStrip = m.TabletsPerStrip,
-                StrapsPerBox    = m.StrapsPerBox,
                 IsActive        = m.IsActive,
                 Units = m.Units
                     .Where(u => u.IsActive)
@@ -50,16 +48,16 @@ public class SaleRepository : ISaleRepository
                     })
                     .ToList(),
                 Batches = m.Batches
-                    .Where(b => b.ExpiryDate.Date > DateTime.UtcNow.Date && b.QuantityInTablets > 0)
+                    .Where(b => b.ExpiryDate.Date > DateTime.UtcNow.Date && b.QuantityInBaseUnit > 0)
                     .OrderBy(b => b.ExpiryDate)
                     .Select(b => new MedicineBatch
                     {
-                        BatchId                = b.BatchId,
-                        MedicineId             = b.MedicineId,
-                        BatchNumber            = b.BatchNumber,
-                        ExpiryDate             = b.ExpiryDate,
-                        QuantityInTablets      = b.QuantityInTablets,
-                        PurchasePricePerTablet = b.PurchasePricePerTablet
+                        BatchId              = b.BatchId,
+                        MedicineId           = b.MedicineId,
+                        BatchNumber          = b.BatchNumber,
+                        ExpiryDate           = b.ExpiryDate,
+                        QuantityInBaseUnit   = b.QuantityInBaseUnit,
+                        CostPricePerBaseUnit = b.CostPricePerBaseUnit
                     })
                     .ToList()
             })
@@ -90,9 +88,9 @@ public class SaleRepository : ISaleRepository
                     ?? throw new InvalidOperationException(
                         $"Batch {batchId} disappeared during transaction.");
 
-                batch.QuantityInTablets -= baseUnitsToDeduct;
+                batch.QuantityInBaseUnit -= baseUnitsToDeduct;
 
-                if (batch.QuantityInTablets < 0)
+                if (batch.QuantityInBaseUnit < 0)
                     throw new InvalidOperationException(
                         $"Insufficient stock in batch {batch.BatchNumber} (ID {batchId}). " +
                         "The sale cannot be completed because stock would go negative. " +

@@ -16,6 +16,13 @@ public interface IMedicineRepository
     Task<int> CountAsync();
     Task<Medicine> CreateAsync(Medicine medicine);
     Task<IReadOnlyList<Medicine>> CreateBulkAsync(IEnumerable<Medicine> medicines);
+
+    /// <summary>
+    /// Persists the medicine together with its pre-populated <see cref="Medicine.Units"/>
+    /// collection in a single <see cref="Microsoft.EntityFrameworkCore.DbContext.SaveChangesAsync"/> call.
+    /// The caller must populate <c>medicine.Units</c> before calling this method.
+    /// </summary>
+    Task<Medicine> CreateWithUnitsAsync(Medicine medicine);
     Task<Medicine> UpdateAsync(Medicine medicine);
     Task<bool> DeleteAsync(int id);
 

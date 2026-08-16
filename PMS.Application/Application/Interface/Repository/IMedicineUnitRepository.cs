@@ -28,4 +28,11 @@ public interface IMedicineUnitRepository
     /// Load a medicine with Units AND FEFO batches — used by the sale service.
     /// </summary>
     Task<Medicine?> GetMedicineWithUnitsAndFefoStockAsync(int medicineId);
+
+    /// <summary>
+    /// Returns the medicine with its units and the total stock per unit
+    /// expressed in base units.  Used by GET /api/medicines/{id}/units.
+    /// Returns null when the medicine does not exist for the tenant.
+    /// </summary>
+    Task<(Medicine? Medicine, int TotalStockInBaseUnit)> GetMedicineWithStockTotalsAsync(int medicineId);
 }

@@ -15,11 +15,13 @@ public class UpdateMedicineBatchDto
     [Required(ErrorMessage = "Expiry date is required.")]
     public DateTime ExpiryDate { get; set; }
 
+    /// <summary>Current stock quantity in the medicine's base unit.</summary>
     [Range(1, int.MaxValue, ErrorMessage = "Quantity must be at least 1.")]
-    public int QuantityInTablets { get; set; }
+    public int QuantityInBaseUnit { get; set; }
 
-    [Range(0, double.MaxValue, ErrorMessage = "Purchase price must be non-negative.")]
-    public decimal PurchasePricePerTablet { get; set; }
+    /// <summary>Purchase cost per one base-unit item.</summary>
+    [Range(0, double.MaxValue, ErrorMessage = "CostPricePerBaseUnit must be non-negative.")]
+    public decimal CostPricePerBaseUnit { get; set; }
 
     public DateTime UpdatedAt { get; set; }
 }

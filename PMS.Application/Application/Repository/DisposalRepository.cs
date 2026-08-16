@@ -20,11 +20,11 @@ public class DisposalRepository : IDisposalRepository
             .Where(b => b.BatchId == batchId)
             .Select(b => new MedicineBatch
             {
-                BatchId           = b.BatchId,
-                MedicineId        = b.MedicineId,
-                BatchNumber       = b.BatchNumber,
-                QuantityInTablets = b.QuantityInTablets,
-                ExpiryDate        = b.ExpiryDate
+                BatchId            = b.BatchId,
+                MedicineId         = b.MedicineId,
+                BatchNumber        = b.BatchNumber,
+                QuantityInBaseUnit = b.QuantityInBaseUnit,
+                ExpiryDate         = b.ExpiryDate
             })
             .FirstOrDefaultAsync();
 
@@ -40,9 +40,9 @@ public class DisposalRepository : IDisposalRepository
                 var batch = await _db.MedicineBatches.FindAsync(batchId)
                     ?? throw new InvalidOperationException($"Batch {batchId} not found.");
 
-                batch.QuantityInTablets -= tablets;
+                batch.QuantityInBaseUnit -= tablets;
 
-                if (batch.QuantityInTablets < 0)
+                if (batch.QuantityInBaseUnit < 0)
                     throw new InvalidOperationException(
                         $"Insufficient stock in batch {batch.BatchNumber} (ID {batchId}). " +
                         "The disposal cannot be completed because stock would go negative. " +

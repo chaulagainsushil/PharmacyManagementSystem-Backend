@@ -14,18 +14,6 @@ public class UpdateMedicineDto
     public int? CategoryId { get; set; }
     public int? ManufacturerId { get; set; }
 
-    [Range(1, int.MaxValue, ErrorMessage = "TabletsPerStrip must be at least 1.")]
-    public int TabletsPerStrip { get; set; } = 1;
-
-    [Range(1, int.MaxValue, ErrorMessage = "StrapsPerBox must be at least 1.")]
-    public int StrapsPerBox { get; set; } = 1;
-
-    [Range(0, double.MaxValue, ErrorMessage = "Strip price must be non-negative.")]
-    public decimal StripPrice { get; set; }
-
-    [Range(0, double.MaxValue, ErrorMessage = "Tablet price must be non-negative.")]
-    public decimal TabletPrice { get; set; }
-
     [Range(0, int.MaxValue, ErrorMessage = "Reorder level must be non-negative.")]
     public int ReorderLevel { get; set; } = 10;
 
@@ -35,7 +23,8 @@ public class UpdateMedicineDto
 
     /// <summary>
     /// When provided, replaces all existing units for this medicine.
-    /// Must include exactly one IsBaseUnit=true and exactly one IsDefault=true.
+    /// Must include exactly one IsBaseUnit=true, exactly one IsDefault=true,
+    /// and all UnitPrice > 0.
     /// When omitted (null), existing units are left untouched.
     /// </summary>
     public List<CreateMedicineUnitDto>? Units { get; set; }

@@ -17,4 +17,11 @@ public interface IMedicineBatchRepository
     Task<MedicineBatch> UpdateAsync(MedicineBatch batch);
     Task<bool> DeleteAsync(int id);
     Task<IEnumerable<MedicineBatchListItemDto>> GetNearExpiryAsync(int days);
+
+    /// <summary>
+    /// Returns the active MedicineUnit with its UnitOfMeasure loaded — used during batch creation
+    /// to validate CanPurchase and resolve the quantity/cost conversion.
+    /// Returns null if the unit is not found or inactive.
+    /// </summary>
+    Task<MedicineUnit?> GetPurchaseUnitAsync(int medicineId, int medicineUnitId);
 }

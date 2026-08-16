@@ -46,6 +46,10 @@ public static class ApplicationServiceExtensions
         services.AddScoped<IMedicineUnitRepository, MedicineUnitRepository>();
         services.AddScoped<IMedicineUnitService, MedicineUnitService>();
 
+        // ── Product & ProductUnit (Generic dual-unit system) ───────────────────
+        services.AddScoped<IProductUnitRepository, ProductUnitRepository>();
+        services.AddScoped<IProductUnitService, ProductUnitService>();
+
         // ── Sale ──────────────────────────────────────────────────────────────
         services.AddScoped<ISaleRepository, SaleRepository>();
         services.AddScoped<ISaleService, SaleService>();

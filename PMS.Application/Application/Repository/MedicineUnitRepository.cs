@@ -26,7 +26,11 @@ public class MedicineUnitRepository : IMedicineUnitRepository
                 IsBaseUnit             = mu.IsBaseUnit,
                 IsDefault              = mu.IsDefault,
                 IsActive               = mu.IsActive,
+                CanPurchase            = mu.CanPurchase,
+                CanSell                = mu.CanSell,
+                CostPrice              = mu.CostPrice,
                 UnitPrice              = mu.UnitPrice,
+                Mrp                    = mu.Mrp,
                 UpdatedAt              = mu.UpdatedAt,
                 UnitOfMeasure = new UnitOfMeasure
                 {
@@ -53,7 +57,11 @@ public class MedicineUnitRepository : IMedicineUnitRepository
                 IsBaseUnit             = mu.IsBaseUnit,
                 IsDefault              = mu.IsDefault,
                 IsActive               = mu.IsActive,
+                CanPurchase            = mu.CanPurchase,
+                CanSell                = mu.CanSell,
+                CostPrice              = mu.CostPrice,
                 UnitPrice              = mu.UnitPrice,
+                Mrp                    = mu.Mrp,
                 UpdatedAt              = mu.UpdatedAt,
                 UnitOfMeasure = new UnitOfMeasure
                 {
@@ -78,7 +86,11 @@ public class MedicineUnitRepository : IMedicineUnitRepository
                 IsBaseUnit             = mu.IsBaseUnit,
                 IsDefault              = mu.IsDefault,
                 IsActive               = mu.IsActive,
+                CanPurchase            = mu.CanPurchase,
+                CanSell                = mu.CanSell,
+                CostPrice              = mu.CostPrice,
                 UnitPrice              = mu.UnitPrice,
+                Mrp                    = mu.Mrp,
                 UpdatedAt              = mu.UpdatedAt,
                 UnitOfMeasure = new UnitOfMeasure
                 {
@@ -113,18 +125,15 @@ public class MedicineUnitRepository : IMedicineUnitRepository
     /// <summary>
     /// Returns the medicine with its active Units collection loaded — needed by service domain
     /// methods that call Medicine.ConvertToBaseQuantity, SetDefaultUnit, etc.
-    /// Uses Select to avoid Include.
     /// </summary>
     public async Task<Medicine?> GetMedicineWithUnitsAsync(int medicineId) =>
         await _db.Medicines
             .Where(m => m.MedicineId == medicineId && m.IsActive)
             .Select(m => new Medicine
             {
-                MedicineId           = m.MedicineId,
-                Name                 = m.Name,
-                TabletsPerStrip      = m.TabletsPerStrip,
-                StrapsPerBox         = m.StrapsPerBox,
-                IsActive             = m.IsActive,
+                MedicineId = m.MedicineId,
+                Name       = m.Name,
+                IsActive   = m.IsActive,
                 Units = m.Units
                     .Where(u => u.IsActive)
                     .Select(u => new MedicineUnit
@@ -136,7 +145,11 @@ public class MedicineUnitRepository : IMedicineUnitRepository
                         IsBaseUnit             = u.IsBaseUnit,
                         IsDefault              = u.IsDefault,
                         IsActive               = u.IsActive,
+                        CanPurchase            = u.CanPurchase,
+                        CanSell                = u.CanSell,
+                        CostPrice              = u.CostPrice,
                         UnitPrice              = u.UnitPrice,
+                        Mrp                    = u.Mrp,
                         UpdatedAt              = u.UpdatedAt,
                         UnitOfMeasure = new UnitOfMeasure
                         {
@@ -158,11 +171,9 @@ public class MedicineUnitRepository : IMedicineUnitRepository
             .Where(m => m.MedicineId == medicineId && m.IsActive)
             .Select(m => new Medicine
             {
-                MedicineId           = m.MedicineId,
-                Name                 = m.Name,
-                TabletsPerStrip      = m.TabletsPerStrip,
-                StrapsPerBox         = m.StrapsPerBox,
-                IsActive             = m.IsActive,
+                MedicineId = m.MedicineId,
+                Name       = m.Name,
+                IsActive   = m.IsActive,
                 Units = m.Units
                     .Where(u => u.IsActive)
                     .Select(u => new MedicineUnit
@@ -174,7 +185,11 @@ public class MedicineUnitRepository : IMedicineUnitRepository
                         IsBaseUnit             = u.IsBaseUnit,
                         IsDefault              = u.IsDefault,
                         IsActive               = u.IsActive,
+                        CanPurchase            = u.CanPurchase,
+                        CanSell                = u.CanSell,
+                        CostPrice              = u.CostPrice,
                         UnitPrice              = u.UnitPrice,
+                        Mrp                    = u.Mrp,
                         UpdatedAt              = u.UpdatedAt,
                         UnitOfMeasure = new UnitOfMeasure
                         {
@@ -185,18 +200,77 @@ public class MedicineUnitRepository : IMedicineUnitRepository
                     })
                     .ToList(),
                 Batches = m.Batches
-                    .Where(b => b.ExpiryDate.Date > DateTime.UtcNow.Date && b.QuantityInTablets > 0)
+                    .Where(b => b.ExpiryDate.Date > DateTime.UtcNow.Date && b.QuantityInBaseUnit > 0)
                     .OrderBy(b => b.ExpiryDate)
                     .Select(b => new MedicineBatch
                     {
-                        BatchId                = b.BatchId,
-                        MedicineId             = b.MedicineId,
-                        BatchNumber            = b.BatchNumber,
-                        ExpiryDate             = b.ExpiryDate,
-                        QuantityInTablets      = b.QuantityInTablets,
-                        PurchasePricePerTablet = b.PurchasePricePerTablet
+                        BatchId              = b.BatchId,
+                        MedicineId           = b.MedicineId,
+                        BatchNumber          = b.BatchNumber,
+                        ExpiryDate           = b.ExpiryDate,
+                        QuantityInBaseUnit   = b.QuantityInBaseUnit,
+                        CostPricePerBaseUnit = b.CostPricePerBaseUnit
                     })
                     .ToList()
             })
             .FirstOrDefaultAsync();
+
+    /// <summary>
+    /// Returns the medicine with its units and total stock in base units.
+    /// Used by GET /api/medicines/{id}/units to compute TotalInBaseUnits per unit.
+    /// </summary>
+    public async Task<(Medicine? Medicine, int TotalStockInBaseUnit)> GetMedicineWithStockTotalsAsync(
+        int medicineId)
+    {
+        var medicine = await _db.Medicines
+            .Where(m => m.MedicineId == medicineId && m.IsActive)
+            .Select(m => new Medicine
+            {
+                MedicineId = m.MedicineId,
+                Name       = m.Name,
+                IsActive   = m.IsActive,
+                Units = m.Units
+                    .Where(u => u.IsActive)
+                    .Select(u => new MedicineUnit
+                    {
+                        MedicineUnitId         = u.MedicineUnitId,
+                        MedicineId             = u.MedicineId,
+                        UnitOfMeasureId        = u.UnitOfMeasureId,
+                        ConversionFactorToBase = u.ConversionFactorToBase,
+                        IsBaseUnit             = u.IsBaseUnit,
+                        IsDefault              = u.IsDefault,
+                        IsActive               = u.IsActive,
+                        CanPurchase            = u.CanPurchase,
+                        CanSell                = u.CanSell,
+                        CostPrice              = u.CostPrice,
+                        UnitPrice              = u.UnitPrice,
+                        Mrp                    = u.Mrp,
+                        UpdatedAt              = u.UpdatedAt,
+                        UnitOfMeasure = new UnitOfMeasure
+                        {
+                            UnitOfMeasureId = u.UnitOfMeasure.UnitOfMeasureId,
+                            Name            = u.UnitOfMeasure.Name,
+                            Symbol          = u.UnitOfMeasure.Symbol,
+                            IsActive        = u.UnitOfMeasure.IsActive
+                        }
+                    })
+                    .ToList(),
+                Batches = m.Batches
+                    .Where(b => !b.IsExpired && b.QuantityInBaseUnit > 0)
+                    .Select(b => new MedicineBatch
+                    {
+                        BatchId            = b.BatchId,
+                        MedicineId         = b.MedicineId,
+                        QuantityInBaseUnit = b.QuantityInBaseUnit
+                    })
+                    .ToList()
+            })
+            .FirstOrDefaultAsync();
+
+        if (medicine is null)
+            return (null, 0);
+
+        int totalStockInBaseUnit = medicine.Batches?.Sum(b => b.QuantityInBaseUnit) ?? 0;
+        return (medicine, totalStockInBaseUnit);
+    }
 }

@@ -425,18 +425,6 @@ namespace PMS.Repository.Migrations
                     b.Property<bool>("RequiresPrescription")
                         .HasColumnType("boolean");
 
-                    b.Property<int>("StrapsPerBox")
-                        .HasColumnType("integer");
-
-                    b.Property<decimal>("StripPrice")
-                        .HasColumnType("numeric(18,4)");
-
-                    b.Property<decimal>("TabletPrice")
-                        .HasColumnType("numeric(18,4)");
-
-                    b.Property<int>("TabletsPerStrip")
-                        .HasColumnType("integer");
-
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uuid");
 
@@ -465,6 +453,9 @@ namespace PMS.Repository.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<decimal>("CostPricePerBaseUnit")
+                        .HasColumnType("numeric(18,4)");
+
                     b.Property<DateTime>("ExpiryDate")
                         .HasColumnType("timestamp with time zone");
 
@@ -474,10 +465,13 @@ namespace PMS.Repository.Migrations
                     b.Property<int>("MedicineId")
                         .HasColumnType("integer");
 
-                    b.Property<decimal>("PurchasePricePerTablet")
-                        .HasColumnType("numeric(18,4)");
+                    b.Property<int?>("PurchaseMedicineUnitId")
+                        .HasColumnType("integer");
 
-                    b.Property<int>("QuantityInTablets")
+                    b.Property<int?>("PurchaseQuantityInPurchaseUnit")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("QuantityInBaseUnit")
                         .HasColumnType("integer");
 
                     b.Property<DateTime>("ReceivedDate")
@@ -496,11 +490,13 @@ namespace PMS.Repository.Migrations
 
                     b.HasIndex("MedicineId");
 
+                    b.HasIndex("PurchaseMedicineUnitId");
+
                     b.HasIndex("SupplierId");
 
                     b.ToTable("MedicineBatches", t =>
                         {
-                            t.HasCheckConstraint("CK_MedicineBatches_QuantityInTablets_NonNegative", "\"QuantityInTablets\" >= 0");
+                            t.HasCheckConstraint("CK_MedicineBatches_QuantityInBaseUnit_NonNegative", "\"QuantityInBaseUnit\" >= 0");
                         });
                 });
 
@@ -512,8 +508,21 @@ namespace PMS.Repository.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("MedicineUnitId"));
 
+                    b.Property<bool>("CanPurchase")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("CanSell")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
                     b.Property<decimal>("ConversionFactorToBase")
                         .HasColumnType("numeric(18,6)");
+
+                    b.Property<decimal>("CostPrice")
+                        .HasColumnType("numeric(18,4)");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
@@ -526,6 +535,9 @@ namespace PMS.Repository.Migrations
 
                     b.Property<int>("MedicineId")
                         .HasColumnType("integer");
+
+                    b.Property<decimal>("Mrp")
+                        .HasColumnType("numeric(18,4)");
 
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uuid");
@@ -637,6 +649,88 @@ namespace PMS.Repository.Migrations
                         .IsUnique();
 
                     b.ToTable("PharmacyProfiles");
+                });
+
+            modelBuilder.Entity("PMS.Models.Models.Product", b =>
+                {
+                    b.Property<int>("ProductId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("ProductId"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("ProductId");
+
+                    b.ToTable("Products");
+                });
+
+            modelBuilder.Entity("PMS.Models.Models.ProductUnit", b =>
+                {
+                    b.Property<int>("ProductUnitId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("ProductUnitId"));
+
+                    b.Property<decimal>("ConversionFactorToBase")
+                        .HasColumnType("numeric(18,6)");
+
+                    b.Property<bool>("IsBaseUnit")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("ProductId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("PurchasePrice")
+                        .HasColumnType("numeric(18,4)");
+
+                    b.Property<decimal>("SalePrice")
+                        .HasColumnType("numeric(18,4)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("TotalUnitQty")
+                        .HasColumnType("numeric(18,6)");
+
+                    b.Property<int>("UnitOfMeasureId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("ProductUnitId");
+
+                    b.HasIndex("UnitOfMeasureId");
+
+                    b.HasIndex("ProductId", "UnitOfMeasureId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_ProductUnit_ProductId_UnitOfMeasureId");
+
+                    b.ToTable("ProductUnits");
                 });
 
             modelBuilder.Entity("PMS.Models.Models.Sale", b =>
@@ -1046,12 +1140,19 @@ namespace PMS.Repository.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("PMS.Models.Models.MedicineUnit", "PurchaseMedicineUnit")
+                        .WithMany("PurchasedBatches")
+                        .HasForeignKey("PurchaseMedicineUnitId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("PMS.Models.Models.Supplier", "Supplier")
                         .WithMany("Batches")
                         .HasForeignKey("SupplierId")
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("Medicine");
+
+                    b.Navigation("PurchaseMedicineUnit");
 
                     b.Navigation("Supplier");
                 });
@@ -1084,6 +1185,25 @@ namespace PMS.Repository.Migrations
                         .IsRequired();
 
                     b.Navigation("PharmacyProfile");
+                });
+
+            modelBuilder.Entity("PMS.Models.Models.ProductUnit", b =>
+                {
+                    b.HasOne("PMS.Models.Models.Product", "Product")
+                        .WithMany("Units")
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("PMS.Models.Models.UnitOfMeasure", "UnitOfMeasure")
+                        .WithMany("ProductUnits")
+                        .HasForeignKey("UnitOfMeasureId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Product");
+
+                    b.Navigation("UnitOfMeasure");
                 });
 
             modelBuilder.Entity("PMS.Models.Models.Sale", b =>
@@ -1186,11 +1306,21 @@ namespace PMS.Repository.Migrations
                     b.Navigation("SaleItems");
                 });
 
+            modelBuilder.Entity("PMS.Models.Models.MedicineUnit", b =>
+                {
+                    b.Navigation("PurchasedBatches");
+                });
+
             modelBuilder.Entity("PMS.Models.Models.PharmacyProfile", b =>
                 {
                     b.Navigation("PhoneNumbers");
 
                     b.Navigation("Subscriptions");
+                });
+
+            modelBuilder.Entity("PMS.Models.Models.Product", b =>
+                {
+                    b.Navigation("Units");
                 });
 
             modelBuilder.Entity("PMS.Models.Models.Sale", b =>
@@ -1206,6 +1336,8 @@ namespace PMS.Repository.Migrations
             modelBuilder.Entity("PMS.Models.Models.UnitOfMeasure", b =>
                 {
                     b.Navigation("MedicineUnits");
+
+                    b.Navigation("ProductUnits");
                 });
 
             modelBuilder.Entity("PMS.Models.Models.User", b =>
