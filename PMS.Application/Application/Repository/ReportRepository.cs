@@ -111,11 +111,11 @@ public class ReportRepository : IReportRepository
         var fromDate = DateTime.SpecifyKind((from ?? DateTime.MinValue).Date,           DateTimeKind.Utc);
 
         var query = _db.SaleItems
-            .Where(si => si.Sale.SaleDate >= fromDate && si.Sale.SaleDate < toDate)
+            .Where(si => si.Sale.SaleDate >= fromDate && si.Sale.SaleDate < toDate && si.MedicineId != null)
             .AsQueryable();
 
         if (manufacturerId.HasValue)
-            query = query.Where(si => si.Medicine.ManufacturerId == manufacturerId.Value);
+            query = query.Where(si => si.Medicine != null && si.Medicine.ManufacturerId == manufacturerId.Value);
 
         if (supplierId.HasValue)
             query = query.Where(si =>
@@ -126,14 +126,14 @@ public class ReportRepository : IReportRepository
             .GroupBy(si => new
             {
                 si.MedicineId,
-                si.Medicine.Name,
-                GenericName      = si.Medicine.GenericName,
-                CategoryName     = si.Medicine.Category != null ? si.Medicine.Category.CategoryName : null,
-                ManufacturerName = si.Medicine.Manufacturer != null ? si.Medicine.Manufacturer.Name : null,
+                Name = si.Medicine != null ? si.Medicine.Name : string.Empty,
+                GenericName      = si.Medicine != null ? si.Medicine.GenericName : null,
+                CategoryName     = si.Medicine != null && si.Medicine.Category != null ? si.Medicine.Category.CategoryName : null,
+                ManufacturerName = si.Medicine != null && si.Medicine.Manufacturer != null ? si.Medicine.Manufacturer.Name : null,
             })
             .Select(g => new StockConsumptionItemDto
             {
-                MedicineId        = g.Key.MedicineId,
+                MedicineId        = g.Key.MedicineId ?? 0,
                 MedicineName      = g.Key.Name,
                 GenericName       = g.Key.GenericName,
                 CategoryName      = g.Key.CategoryName,
@@ -175,11 +175,11 @@ public class ReportRepository : IReportRepository
 
     public async Task<List<TopMedicineDto>> GetTopMedicinesAsync(DateTime from, DateTime to, int top = 10) =>
         await _db.SaleItems
-            .Where(si => si.Sale.SaleDate >= from && si.Sale.SaleDate < to)
-            .GroupBy(si => new { si.MedicineId, si.Medicine.Name })
+            .Where(si => si.Sale.SaleDate >= from && si.Sale.SaleDate < to && si.MedicineId != null)
+            .GroupBy(si => new { si.MedicineId, Name = si.Medicine != null ? si.Medicine.Name : string.Empty })
             .Select(g => new TopMedicineDto
             {
-                MedicineId        = g.Key.MedicineId,
+                MedicineId        = g.Key.MedicineId ?? 0,
                 MedicineName      = g.Key.Name,
                 TotalQuantitySold = g.Sum(x => x.Quantity),
                 TotalRevenue      = g.Sum(x => x.LineTotal),
@@ -191,8 +191,8 @@ public class ReportRepository : IReportRepository
     public async Task<List<TopManufacturerDto>> GetTopManufacturersAsync(DateTime from, DateTime to, int top = 10) =>
         await _db.SaleItems
             .Where(si => si.Sale.SaleDate >= from && si.Sale.SaleDate < to
-                         && si.Medicine.ManufacturerId != null)
-            .GroupBy(si => new { si.Medicine.ManufacturerId, si.Medicine.Manufacturer!.Name })
+                         && si.Medicine != null && si.Medicine.ManufacturerId != null)
+            .GroupBy(si => new { si.Medicine.ManufacturerId, Name = si.Medicine.Manufacturer != null ? si.Medicine.Manufacturer.Name : string.Empty })
             .Select(g => new TopManufacturerDto
             {
                 ManufacturerId     = g.Key.ManufacturerId!.Value,

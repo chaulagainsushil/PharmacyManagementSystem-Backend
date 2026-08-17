@@ -64,6 +64,38 @@ public class SaleRepository : ISaleRepository
             .FirstOrDefaultAsync();
 
     /// <inheritdoc/>
+    public async Task<Product?> GetProductWithUnitsAsync(int productId) =>
+        await _db.Products
+            .Where(p => p.ProductId == productId && p.IsActive)
+            .Select(p => new Product
+            {
+                ProductId   = p.ProductId,
+                Name        = p.Name,
+                Description = p.Description,
+                IsActive    = p.IsActive,
+                Units = p.Units
+                    .Select(u => new ProductUnit
+                    {
+                        ProductUnitId          = u.ProductUnitId,
+                        ProductId              = u.ProductId,
+                        UnitOfMeasureId        = u.UnitOfMeasureId,
+                        IsBaseUnit             = u.IsBaseUnit,
+                        ConversionFactorToBase = u.ConversionFactorToBase,
+                        TotalUnitQty           = u.TotalUnitQty,
+                        PurchasePrice          = u.PurchasePrice,
+                        SalePrice              = u.SalePrice,
+                        UnitOfMeasure = new UnitOfMeasure
+                        {
+                            UnitOfMeasureId = u.UnitOfMeasure.UnitOfMeasureId,
+                            Name            = u.UnitOfMeasure.Name,
+                            Symbol          = u.UnitOfMeasure.Symbol
+                        }
+                    })
+                    .ToList()
+            })
+            .FirstOrDefaultAsync();
+
+    /// <inheritdoc/>
     public async Task<bool> CustomerExistsAsync(int customerId) =>
         await _db.Customers.AnyAsync(c => c.CustomerId == customerId);
 
@@ -139,12 +171,23 @@ public class SaleRepository : ISaleRepository
                     .Select(si => new SaleItemResponseDto
                     {
                         SaleItemId           = si.SaleItemId,
+                        ItemType             = si.ItemType,
+                        // Medicine fields
                         MedicineId           = si.MedicineId,
-                        MedicineName         = si.Medicine.Name,
+                        MedicineName         = si.Medicine != null ? si.Medicine.Name : null,
                         BatchId              = si.BatchId,
-                        BatchNumber          = si.Batch.BatchNumber,
+                        BatchNumber          = si.Batch != null ? si.Batch.BatchNumber : null,
                         MedicineUnitId       = si.MedicineUnitId,
-                        UomName              = si.MedicineUnit.UnitOfMeasure.Name,
+                        // Product fields
+                        ProductId            = si.ProductId,
+                        ProductName          = si.Product != null ? si.Product.Name : null,
+                        ProductUnitId        = si.ProductUnitId,
+                        // Common fields
+                        UomName              = si.ItemType == "Medicine" 
+                                               ? (si.MedicineUnit != null && si.MedicineUnit.UnitOfMeasure != null 
+                                                  ? si.MedicineUnit.UnitOfMeasure.Name : string.Empty)
+                                               : (si.ProductUnit != null && si.ProductUnit.UnitOfMeasure != null 
+                                                  ? si.ProductUnit.UnitOfMeasure.Name : string.Empty),
                         Quantity             = si.Quantity,
                         BaseQuantityDeducted = si.BaseQuantityDeducted,
                         UnitPrice            = si.UnitPrice,
@@ -180,12 +223,23 @@ public class SaleRepository : ISaleRepository
                     .Select(si => new SaleItemResponseDto
                     {
                         SaleItemId           = si.SaleItemId,
+                        ItemType             = si.ItemType,
+                        // Medicine fields
                         MedicineId           = si.MedicineId,
-                        MedicineName         = si.Medicine.Name,
+                        MedicineName         = si.Medicine != null ? si.Medicine.Name : null,
                         BatchId              = si.BatchId,
-                        BatchNumber          = si.Batch.BatchNumber,
+                        BatchNumber          = si.Batch != null ? si.Batch.BatchNumber : null,
                         MedicineUnitId       = si.MedicineUnitId,
-                        UomName              = si.MedicineUnit.UnitOfMeasure.Name,
+                        // Product fields
+                        ProductId            = si.ProductId,
+                        ProductName          = si.Product != null ? si.Product.Name : null,
+                        ProductUnitId        = si.ProductUnitId,
+                        // Common fields
+                        UomName              = si.ItemType == "Medicine" 
+                                               ? (si.MedicineUnit != null && si.MedicineUnit.UnitOfMeasure != null 
+                                                  ? si.MedicineUnit.UnitOfMeasure.Name : string.Empty)
+                                               : (si.ProductUnit != null && si.ProductUnit.UnitOfMeasure != null 
+                                                  ? si.ProductUnit.UnitOfMeasure.Name : string.Empty),
                         Quantity             = si.Quantity,
                         BaseQuantityDeducted = si.BaseQuantityDeducted,
                         UnitPrice            = si.UnitPrice,

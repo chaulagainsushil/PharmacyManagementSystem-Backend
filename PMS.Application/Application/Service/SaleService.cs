@@ -32,68 +32,115 @@ public class SaleService : ISaleService
 
         foreach (var itemDto in dto.Items)
         {
-            var medicine = await _repo.GetMedicineWithUnitsAndFefoStockAsync(itemDto.MedicineId);
-            if (medicine is null)
-                return (false, $"Medicine with ID {itemDto.MedicineId} not found or inactive.", null);
-
-            var saleUnit = medicine.Units.FirstOrDefault(u => u.MedicineUnitId == itemDto.MedicineUnitId);
-            if (saleUnit is null)
-                return (false,
-                    $"MedicineUnit {itemDto.MedicineUnitId} is not attached to medicine '{medicine.Name}'.",
-                    null);
-
-            // ── CanSell validation ──────────────────────────────────────────
-            if (!saleUnit.CanSell)
-                return (false,
-                    $"Unit '{saleUnit.UnitOfMeasure?.Name ?? saleUnit.MedicineUnitId.ToString()}' " +
-                    $"is not marked as sellable (CanSell = false) for medicine '{medicine.Name}'. " +
-                    "Use a unit that is enabled for sales.",
-                    null);
-
-            // ── Active check ────────────────────────────────────────────────
-            if (!saleUnit.IsActive)
-                return (false,
-                    $"Unit '{saleUnit.UnitOfMeasure?.Name ?? saleUnit.MedicineUnitId.ToString()}' " +
-                    $"is inactive for medicine '{medicine.Name}' and cannot be used for sales.",
-                    null);
-
-            var baseUnitsRequested = medicine.ConvertToBaseQuantity(itemDto.MedicineUnitId, itemDto.Quantity);
-            var unitPrice          = saleUnit.UnitPrice;   // selling price, not cost price
-
-            var totalAvailable = medicine.Batches.Sum(b => b.QuantityInBaseUnit);
-            if (totalAvailable < baseUnitsRequested)
-                return (false,
-                    $"Insufficient stock for '{medicine.Name}'. " +
-                    $"Requested {baseUnitsRequested} base unit(s) but only {totalAvailable} available.",
-                    null);
-
-            // FEFO split
-            var remaining = baseUnitsRequested;
-            foreach (var batch in medicine.Batches)
+            if (itemDto.ItemType == "Product")
             {
-                if (remaining <= 0) break;
+                // ── Product Sale Logic ─────────────────────────────────────────
+                if (!itemDto.ProductId.HasValue || !itemDto.ProductUnitId.HasValue)
+                    return (false, "ProductId and ProductUnitId are required for Product sales.", null);
 
-                var takeFromBatch    = Math.Min(remaining, batch.QuantityInBaseUnit);
-                remaining -= takeFromBatch;
+                var product = await _repo.GetProductWithUnitsAsync(itemDto.ProductId.Value);
+                if (product is null)
+                    return (false, $"Product with ID {itemDto.ProductId} not found or inactive.", null);
 
-                var customerUnitsTaken = takeFromBatch / saleUnit.ConversionFactorToBase;
-                var grossAmount        = customerUnitsTaken * unitPrice;
-                var discountAmount     = Math.Round(grossAmount * itemDto.DiscountPercent / 100m, 4);
-                var lineTotal          = Math.Round(grossAmount - discountAmount, 4);
+                var productUnit = product.Units.FirstOrDefault(u => u.ProductUnitId == itemDto.ProductUnitId.Value);
+                if (productUnit is null)
+                    return (false,
+                        $"ProductUnit {itemDto.ProductUnitId} is not attached to product '{product.Name}'.",
+                        null);
+
+                // Simple calculation for products (no batch/FEFO logic)
+                var unitPrice      = productUnit.SalePrice / productUnit.TotalUnitQty;  // price per single item
+                var grossAmount    = unitPrice * itemDto.Quantity;
+                var discountAmount = Math.Round(grossAmount * itemDto.DiscountPercent / 100m, 4);
+                var lineTotal      = Math.Round(grossAmount - discountAmount, 4);
 
                 plannedItems.Add(new PlannedSaleItem(
-                    MedicineId          : itemDto.MedicineId,
-                    BatchId             : batch.BatchId,
-                    MedicineUnitId      : itemDto.MedicineUnitId,
-                    Quantity            : (int)Math.Ceiling(customerUnitsTaken),
-                    BaseQuantityDeducted: takeFromBatch,
-                    UnitPrice           : unitPrice,
-                    DiscountPercent     : itemDto.DiscountPercent,
-                    DiscountAmount      : discountAmount,
-                    LineTotal           : lineTotal
+                    ItemType             : "Product",
+                    MedicineId           : null,
+                    BatchId              : null,
+                    MedicineUnitId       : null,
+                    ProductId            : itemDto.ProductId.Value,
+                    ProductUnitId        : itemDto.ProductUnitId.Value,
+                    Quantity             : itemDto.Quantity,
+                    BaseQuantityDeducted : 0,  // Products don't track batch deductions
+                    UnitPrice            : unitPrice,
+                    DiscountPercent      : itemDto.DiscountPercent,
+                    DiscountAmount       : discountAmount,
+                    LineTotal            : lineTotal
                 ));
+            }
+            else  // Medicine sale (default)
+            {
+                // ── Medicine Sale Logic (existing FEFO logic) ──────────────────
+                if (!itemDto.MedicineId.HasValue || !itemDto.MedicineUnitId.HasValue)
+                    return (false, "MedicineId and MedicineUnitId are required for Medicine sales.", null);
 
-                batchDeductions.Add((batch.BatchId, takeFromBatch));
+                var medicine = await _repo.GetMedicineWithUnitsAndFefoStockAsync(itemDto.MedicineId.Value);
+                if (medicine is null)
+                    return (false, $"Medicine with ID {itemDto.MedicineId} not found or inactive.", null);
+
+                var saleUnit = medicine.Units.FirstOrDefault(u => u.MedicineUnitId == itemDto.MedicineUnitId.Value);
+                if (saleUnit is null)
+                    return (false,
+                        $"MedicineUnit {itemDto.MedicineUnitId} is not attached to medicine '{medicine.Name}'.",
+                        null);
+
+                // ── CanSell validation ──────────────────────────────────────────
+                if (!saleUnit.CanSell)
+                    return (false,
+                        $"Unit '{saleUnit.UnitOfMeasure?.Name ?? saleUnit.MedicineUnitId.ToString()}' " +
+                        $"is not marked as sellable (CanSell = false) for medicine '{medicine.Name}'. " +
+                        "Use a unit that is enabled for sales.",
+                        null);
+
+                // ── Active check ────────────────────────────────────────────────
+                if (!saleUnit.IsActive)
+                    return (false,
+                        $"Unit '{saleUnit.UnitOfMeasure?.Name ?? saleUnit.MedicineUnitId.ToString()}' " +
+                        $"is inactive for medicine '{medicine.Name}' and cannot be used for sales.",
+                        null);
+
+                var baseUnitsRequested = medicine.ConvertToBaseQuantity(itemDto.MedicineUnitId.Value, itemDto.Quantity);
+                var unitPrice          = saleUnit.UnitPrice;   // selling price, not cost price
+
+                var totalAvailable = medicine.Batches.Sum(b => b.QuantityInBaseUnit);
+                if (totalAvailable < baseUnitsRequested)
+                    return (false,
+                        $"Insufficient stock for '{medicine.Name}'. " +
+                        $"Requested {baseUnitsRequested} base unit(s) but only {totalAvailable} available.",
+                        null);
+
+                // FEFO split
+                var remaining = baseUnitsRequested;
+                foreach (var batch in medicine.Batches)
+                {
+                    if (remaining <= 0) break;
+
+                    var takeFromBatch    = Math.Min(remaining, batch.QuantityInBaseUnit);
+                    remaining -= takeFromBatch;
+
+                    var customerUnitsTaken = takeFromBatch / saleUnit.ConversionFactorToBase;
+                    var grossAmount        = customerUnitsTaken * unitPrice;
+                    var discountAmount     = Math.Round(grossAmount * itemDto.DiscountPercent / 100m, 4);
+                    var lineTotal          = Math.Round(grossAmount - discountAmount, 4);
+
+                    plannedItems.Add(new PlannedSaleItem(
+                        ItemType             : "Medicine",
+                        MedicineId           : itemDto.MedicineId.Value,
+                        BatchId              : batch.BatchId,
+                        MedicineUnitId       : itemDto.MedicineUnitId.Value,
+                        ProductId            : null,
+                        ProductUnitId        : null,
+                        Quantity             : (int)Math.Ceiling(customerUnitsTaken),
+                        BaseQuantityDeducted : takeFromBatch,
+                        UnitPrice            : unitPrice,
+                        DiscountPercent      : itemDto.DiscountPercent,
+                        DiscountAmount       : discountAmount,
+                        LineTotal            : lineTotal
+                    ));
+
+                    batchDeductions.Add((batch.BatchId, takeFromBatch));
+                }
             }
         }
 
@@ -117,9 +164,12 @@ public class SaleService : ISaleService
             CreatedAt       = DateTime.UtcNow,
             SaleItems       = plannedItems.Select(p => new SaleItem
             {
+                ItemType             = p.ItemType,
                 MedicineId           = p.MedicineId,
                 BatchId              = p.BatchId,
                 MedicineUnitId       = p.MedicineUnitId,
+                ProductId            = p.ProductId,
+                ProductUnitId        = p.ProductUnitId,
                 Quantity             = p.Quantity,
                 BaseQuantityDeducted = p.BaseQuantityDeducted,
                 UnitPrice            = p.UnitPrice,
@@ -150,9 +200,12 @@ public class SaleService : ISaleService
     // ── Private record for in-memory FEFO planning ─────────────────────────────
 
     private sealed record PlannedSaleItem(
-        int     MedicineId,
-        int     BatchId,
-        int     MedicineUnitId,
+        string  ItemType,
+        int?    MedicineId,
+        int?    BatchId,
+        int?    MedicineUnitId,
+        int?    ProductId,
+        int?    ProductUnitId,
         int     Quantity,
         int     BaseQuantityDeducted,
         decimal UnitPrice,

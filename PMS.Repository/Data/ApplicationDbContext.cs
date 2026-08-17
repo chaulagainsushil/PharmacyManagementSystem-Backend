@@ -261,6 +261,7 @@ public class ApplicationDbContext : IdentityDbContext<IdentityUser>
         {
             e.HasKey(si => si.SaleItemId);
             e.Property(si => si.TenantId).IsRequired();
+            e.Property(si => si.ItemType).IsRequired().HasMaxLength(20).HasDefaultValue("Medicine");
 
             e.Property(si => si.UnitPrice).HasColumnType("numeric(18,4)");
             e.Property(si => si.DiscountPercent).HasColumnType("numeric(5,2)");
@@ -272,20 +273,37 @@ public class ApplicationDbContext : IdentityDbContext<IdentityUser>
                 .HasForeignKey(si => si.SaleId)
                 .OnDelete(DeleteBehavior.Cascade);
 
+            // Medicine-specific relationships (nullable)
             e.HasOne(si => si.Medicine)
                 .WithMany(m => m.SaleItems)
                 .HasForeignKey(si => si.MedicineId)
-                .OnDelete(DeleteBehavior.Restrict);
+                .OnDelete(DeleteBehavior.Restrict)
+                .IsRequired(false);
 
             e.HasOne(si => si.Batch)
                 .WithMany(b => b.SaleItems)
                 .HasForeignKey(si => si.BatchId)
-                .OnDelete(DeleteBehavior.Restrict);
+                .OnDelete(DeleteBehavior.Restrict)
+                .IsRequired(false);
 
             e.HasOne(si => si.MedicineUnit)
                 .WithMany()
                 .HasForeignKey(si => si.MedicineUnitId)
-                .OnDelete(DeleteBehavior.Restrict);
+                .OnDelete(DeleteBehavior.Restrict)
+                .IsRequired(false);
+
+            // Product-specific relationships (nullable)
+            e.HasOne(si => si.Product)
+                .WithMany()
+                .HasForeignKey(si => si.ProductId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .IsRequired(false);
+
+            e.HasOne(si => si.ProductUnit)
+                .WithMany()
+                .HasForeignKey(si => si.ProductUnitId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .IsRequired(false);
         });
 
         // ── ExpiredMedicineDisposal ────────────────────────────────────────────

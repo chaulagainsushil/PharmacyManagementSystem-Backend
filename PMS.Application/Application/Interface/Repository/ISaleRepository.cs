@@ -12,6 +12,12 @@ public interface ISaleRepository
     /// </summary>
     Task<Medicine?> GetMedicineWithUnitsAndFefoStockAsync(int medicineId);
 
+    /// <summary>
+    /// Fetch a product with its active ProductUnits.
+    /// Returns null if product not found or inactive.
+    /// </summary>
+    Task<Product?> GetProductWithUnitsAsync(int productId);
+
     /// <summary>Returns true if the customer exists.</summary>
     Task<bool> CustomerExistsAsync(int customerId);
 

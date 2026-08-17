@@ -804,7 +804,7 @@ namespace PMS.Repository.Migrations
                     b.Property<int>("BaseQuantityDeducted")
                         .HasColumnType("integer");
 
-                    b.Property<int>("BatchId")
+                    b.Property<int?>("BatchId")
                         .HasColumnType("integer");
 
                     b.Property<decimal>("DiscountAmount")
@@ -813,13 +813,26 @@ namespace PMS.Repository.Migrations
                     b.Property<decimal>("DiscountPercent")
                         .HasColumnType("numeric(5,2)");
 
+                    b.Property<string>("ItemType")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("Medicine");
+
                     b.Property<decimal>("LineTotal")
                         .HasColumnType("numeric(18,4)");
 
-                    b.Property<int>("MedicineId")
+                    b.Property<int?>("MedicineId")
                         .HasColumnType("integer");
 
-                    b.Property<int>("MedicineUnitId")
+                    b.Property<int?>("MedicineUnitId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("ProductId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("ProductUnitId")
                         .HasColumnType("integer");
 
                     b.Property<int>("Quantity")
@@ -844,6 +857,10 @@ namespace PMS.Repository.Migrations
                     b.HasIndex("MedicineId");
 
                     b.HasIndex("MedicineUnitId");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("ProductUnitId");
 
                     b.HasIndex("SaleId");
 
@@ -1230,20 +1247,27 @@ namespace PMS.Repository.Migrations
                     b.HasOne("PMS.Models.Models.MedicineBatch", "Batch")
                         .WithMany("SaleItems")
                         .HasForeignKey("BatchId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("PMS.Models.Models.Medicine", "Medicine")
                         .WithMany("SaleItems")
                         .HasForeignKey("MedicineId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("PMS.Models.Models.MedicineUnit", "MedicineUnit")
                         .WithMany()
                         .HasForeignKey("MedicineUnitId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("PMS.Models.Models.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("PMS.Models.Models.ProductUnit", "ProductUnit")
+                        .WithMany()
+                        .HasForeignKey("ProductUnitId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("PMS.Models.Models.Sale", "Sale")
                         .WithMany("SaleItems")
@@ -1256,6 +1280,10 @@ namespace PMS.Repository.Migrations
                     b.Navigation("Medicine");
 
                     b.Navigation("MedicineUnit");
+
+                    b.Navigation("Product");
+
+                    b.Navigation("ProductUnit");
 
                     b.Navigation("Sale");
                 });
