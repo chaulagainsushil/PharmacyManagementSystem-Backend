@@ -1,5 +1,7 @@
 namespace PMS.Common.DTOs.Medicine;
 
+using PMS.Common.DTOs.Uom;
+
 /// <summary>Lightweight response — used for GET all (list).</summary>
 public class MedicineListItemDto
 {
@@ -20,4 +22,7 @@ public class MedicineListItemDto
     /// <summary>Default unit for quick display (name + price). Null if no units attached.</summary>
     public string? DefaultUnitName { get; set; }
     public decimal? DefaultUnitPrice { get; set; }
+
+    /// <summary>All active units configured for this medicine (includes pricing, conversions, etc.).</summary>
+    public List<MedicineUnitDto> Units { get; set; } = new();
 }

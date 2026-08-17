@@ -40,7 +40,30 @@ public class MedicineRepository : IMedicineRepository
                 DefaultUnitPrice     = m.Units
                     .Where(u => u.IsDefault && u.IsActive)
                     .Select(u => (decimal?)u.UnitPrice)
-                    .FirstOrDefault()
+                    .FirstOrDefault(),
+                Units = m.Units
+                    .Where(u => u.IsActive)
+                    .OrderByDescending(u => u.IsDefault)
+                    .ThenBy(u => u.UnitOfMeasure.Name)
+                    .Select(u => new MedicineUnitDto
+                    {
+                        MedicineUnitId         = u.MedicineUnitId,
+                        MedicineId             = u.MedicineId,
+                        UnitOfMeasureId        = u.UnitOfMeasureId,
+                        UomName                = u.UnitOfMeasure.Name,
+                        UomSymbol              = u.UnitOfMeasure.Symbol,
+                        ConversionFactorToBase = u.ConversionFactorToBase,
+                        IsBaseUnit             = u.IsBaseUnit,
+                        IsDefault              = u.IsDefault,
+                        IsActive               = u.IsActive,
+                        CanPurchase            = u.CanPurchase,
+                        CanSell                = u.CanSell,
+                        CostPrice              = u.CostPrice,
+                        UnitPrice              = u.UnitPrice,
+                        Mrp                    = u.Mrp,
+                        UpdatedAt              = u.UpdatedAt
+                    })
+                    .ToList()
             })
             .ToListAsync();
     }
@@ -75,7 +98,30 @@ public class MedicineRepository : IMedicineRepository
                 DefaultUnitPrice     = m.Units
                     .Where(u => u.IsDefault && u.IsActive)
                     .Select(u => (decimal?)u.UnitPrice)
-                    .FirstOrDefault()
+                    .FirstOrDefault(),
+                Units = m.Units
+                    .Where(u => u.IsActive)
+                    .OrderByDescending(u => u.IsDefault)
+                    .ThenBy(u => u.UnitOfMeasure.Name)
+                    .Select(u => new MedicineUnitDto
+                    {
+                        MedicineUnitId         = u.MedicineUnitId,
+                        MedicineId             = u.MedicineId,
+                        UnitOfMeasureId        = u.UnitOfMeasureId,
+                        UomName                = u.UnitOfMeasure.Name,
+                        UomSymbol              = u.UnitOfMeasure.Symbol,
+                        ConversionFactorToBase = u.ConversionFactorToBase,
+                        IsBaseUnit             = u.IsBaseUnit,
+                        IsDefault              = u.IsDefault,
+                        IsActive               = u.IsActive,
+                        CanPurchase            = u.CanPurchase,
+                        CanSell                = u.CanSell,
+                        CostPrice              = u.CostPrice,
+                        UnitPrice              = u.UnitPrice,
+                        Mrp                    = u.Mrp,
+                        UpdatedAt              = u.UpdatedAt
+                    })
+                    .ToList()
             })
             .ToListAsync();
     }
