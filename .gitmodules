@@ -1,0 +1,3 @@
+[submodule "pharmacy-ui"]
+	path = pharmacy-ui
+	url = git@git.samyeak.com.np:siddhasoft/pharmacy-ui.git
