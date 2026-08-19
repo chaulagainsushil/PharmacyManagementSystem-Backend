@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using PMS.Application.Application.Interface.Repository;
+using PMS.Models.Interfaces;
 using PMS.Models.Models;
 using PMS.Repository.Data;
 
@@ -8,8 +9,13 @@ namespace PMS.Application.Application.Repository;
 public class UnitOfMeasureRepository : IUnitOfMeasureRepository
 {
     private readonly ApplicationDbContext _db;
+    private readonly ITenantProvider _tenantProvider;
 
-    public UnitOfMeasureRepository(ApplicationDbContext db) => _db = db;
+    public UnitOfMeasureRepository(ApplicationDbContext db, ITenantProvider tenantProvider)
+    {
+        _db = db;
+        _tenantProvider = tenantProvider;
+    }
 
     public async Task<IReadOnlyList<UnitOfMeasure>> GetAllAsync(bool includeInactive = false)
     {
@@ -23,10 +29,13 @@ public class UnitOfMeasureRepository : IUnitOfMeasureRepository
         await _db.UnitsOfMeasure.AsNoTracking()
             .FirstOrDefaultAsync(u => u.UnitOfMeasureId == id);
 
-    public async Task<bool> ExistsByNameAsync(string name, int? excludeId = null) =>
-        await _db.UnitsOfMeasure.AnyAsync(u =>
-            u.Name.ToLower() == name.ToLower() &&
-            (excludeId == null || u.UnitOfMeasureId != excludeId));
+    public async Task<bool> ExistsByNameAsync(string name, int? excludeId = null)
+    {
+        return await _db.UnitsOfMeasure
+            .AnyAsync(u =>
+                u.Name.ToLower() == name.ToLower() &&
+                (excludeId == null || u.UnitOfMeasureId != excludeId));
+    }
 
     public async Task<UnitOfMeasure> CreateAsync(UnitOfMeasure uom)
     {

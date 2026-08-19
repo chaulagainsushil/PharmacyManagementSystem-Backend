@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using PMS.Application.Application.Interface.Repository;
 using PMS.Common.DTOs.Medicine;
 using PMS.Common.DTOs.Uom;
+using PMS.Models.Interfaces;
 using PMS.Models.Models;
 using PMS.Repository.Data;
 
@@ -10,10 +11,12 @@ namespace PMS.Application.Application.Repository;
 public class MedicineRepository : IMedicineRepository
 {
     private readonly ApplicationDbContext _db;
+    private readonly ITenantProvider _tenantProvider;
 
-    public MedicineRepository(ApplicationDbContext db)
+    public MedicineRepository(ApplicationDbContext db, ITenantProvider tenantProvider)
     {
         _db = db;
+        _tenantProvider = tenantProvider;
     }
 
     public async Task<IEnumerable<MedicineListItemDto>> GetAllAsync()
@@ -179,9 +182,16 @@ public class MedicineRepository : IMedicineRepository
 
     public async Task<bool> ExistsByNameAsync(string name, int? excludeId = null)
     {
-        return await _db.Medicines
+        // The global query filter in ApplicationDbContext automatically filters by tenant
+        var tenantId = _tenantProvider.TenantId;
+        Console.WriteLine($"[DEBUG] ExistsByNameAsync - TenantId: {tenantId}, Name: {name}");
+        
+        var result = await _db.Medicines
             .AnyAsync(m => m.Name.ToLower() == name.ToLower()
                           && (excludeId == null || m.MedicineId != excludeId));
+        
+        Console.WriteLine($"[DEBUG] ExistsByNameAsync - Result: {result}");
+        return result;
     }
 
     public async Task<int> CountAsync()

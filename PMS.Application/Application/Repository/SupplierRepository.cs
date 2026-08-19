@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using PMS.Application.Application.Interface.Repository;
 using PMS.Common.DTOs.Supplier;
+using PMS.Models.Interfaces;
 using PMS.Models.Models;
 using PMS.Repository.Data;
 
@@ -9,8 +10,13 @@ namespace PMS.Application.Application.Repository;
 public class SupplierRepository : ISupplierRepository
 {
     private readonly ApplicationDbContext _db;
+    private readonly ITenantProvider _tenantProvider;
 
-    public SupplierRepository(ApplicationDbContext db) => _db = db;
+    public SupplierRepository(ApplicationDbContext db, ITenantProvider tenantProvider)
+    {
+        _db = db;
+        _tenantProvider = tenantProvider;
+    }
 
     public async Task<IEnumerable<SupplierListItemDto>> GetAllAsync() =>
         await _db.Suppliers
@@ -45,10 +51,12 @@ public class SupplierRepository : ISupplierRepository
     public async Task<Supplier?> GetEntityByIdAsync(int id) =>
         await _db.Suppliers.FindAsync(id);
 
-    public async Task<bool> ExistsByNameAsync(string name, int? excludeId = null) =>
-        await _db.Suppliers
+    public async Task<bool> ExistsByNameAsync(string name, int? excludeId = null)
+    {
+        return await _db.Suppliers
             .AnyAsync(s => s.Name.ToLower() == name.ToLower()
                           && (excludeId == null || s.SupplierId != excludeId));
+    }
 
     public async Task<Supplier> CreateAsync(Supplier supplier)
     {

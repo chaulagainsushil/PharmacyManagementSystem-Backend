@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using PMS.Application.Application.Interface.Repository;
 using PMS.Common.DTOs.Category;
+using PMS.Models.Interfaces;
 using PMS.Models.Models;
 using PMS.Repository.Data;
 
@@ -9,10 +10,12 @@ namespace PMS.Application.Application.Repository;
 public class CategoryRepository : ICategoryRepository
 {
     private readonly ApplicationDbContext _db;
+    private readonly ITenantProvider _tenantProvider;
 
-    public CategoryRepository(ApplicationDbContext db)
+    public CategoryRepository(ApplicationDbContext db, ITenantProvider tenantProvider)
     {
         _db = db;
+        _tenantProvider = tenantProvider;
     }
 
     public async Task<IEnumerable<CategoryListItemDto>> GetAllAsync()

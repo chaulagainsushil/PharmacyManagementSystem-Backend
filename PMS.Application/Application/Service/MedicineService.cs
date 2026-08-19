@@ -45,7 +45,13 @@ public class MedicineService : IMedicineService
     public async Task<(bool Success, string Message, MedicineResponseDto? Data)> CreateAsync(
         CreateMedicineDto dto)
     {
-        if (await _repo.ExistsByNameAsync(dto.Name))
+        var tenantId = _tenantProvider.TenantId;
+        Console.WriteLine($"[DEBUG] CreateAsync - TenantId: {tenantId}, Medicine: {dto.Name}");
+        
+        var exists = await _repo.ExistsByNameAsync(dto.Name);
+        Console.WriteLine($"[DEBUG] ExistsByNameAsync returned: {exists}");
+        
+        if (exists)
             return (false, $"Medicine '{dto.Name}' already exists.", null);
 
         // Check plan medicine limit
