@@ -1,0 +1,146 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main, dev]
+  push:
+    branches: [main, dev]
+
+jobs:
+  test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Restore
+        run: dotnet restore PMS.sln
+
+      - name: Build
+        run: dotnet build PMS.sln --configuration Release --no-restore
+
+      - name: Test
+        id: test
+        continue-on-error: true
+        run: |
+          mkdir -p TestResults
+          dotnet test PMS.Tests/PMS.Tests.csproj \
+            --configuration Release \
+            --no-build \
+            --logger "trx;LogFileName=PMS.Tests.trx" \
+            --results-directory TestResults
+
+      - name: Summarize test results
+        id: summary
+        if: always()
+        run: |
+          set -eo pipefail
+          shopt -s nullglob globstar
+
+          total=0; passed=0; failed=0; skipped=0; errors=0
+
+          for f in TestResults/**/*.trx TestResults/*.trx; do
+            [ -f "$f" ] || continue
+            line=$(grep -oE '<Counters[^/]*/>' "$f" | head -n1 || true)
+            [ -z "$line" ] && continue
+            t=$( printf '%s' "$line" | grep -oE 'total="[0-9]+"'       | grep -oE '[0-9]+' || echo 0)
+            p=$( printf '%s' "$line" | grep -oE 'passed="[0-9]+"'      | grep -oE '[0-9]+' || echo 0)
+            fa=$(printf '%s' "$line" | grep -oE 'failed="[0-9]+"'      | grep -oE '[0-9]+' || echo 0)
+            s=$( printf '%s' "$line" | grep -oE 'notExecuted="[0-9]+"' | grep -oE '[0-9]+' || echo 0)
+            e=$( printf '%s' "$line" | grep -oE ' error="[0-9]+"'      | grep -oE '[0-9]+' || echo 0)
+            total=$((total + t)); passed=$((passed + p)); failed=$((failed + fa))
+            skipped=$((skipped + s)); errors=$((errors + e))
+          done
+
+          outcome="${{ steps.test.outcome }}"
+          if [ "$outcome" = "success" ] && [ "$failed" -eq 0 ] && [ "$errors" -eq 0 ]; then
+            status="passed"
+          else
+            status="failed"
+          fi
+
+          { echo "status=$status"; echo "total=$total"; echo "passed=$passed"
+            echo "failed=$failed"; echo "skipped=$skipped"; echo "errors=$errors"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## Unit Tests"
+            echo "| Metric  | Count |"
+            echo "|---------|-------|"
+            echo "| Total   | $total |"
+            echo "| Passed  | $passed |"
+            echo "| Failed  | $failed |"
+            echo "| Skipped | $skipped |"
+            echo "| Errors  | $errors |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fail job if tests failed
+        if: always() && steps.summary.outputs.status == 'failed'
+        run: |
+          echo "Tests failed: ${{ steps.summary.outputs.failed }} failed, ${{ steps.summary.outputs.errors }} errors"
+          exit 1
+
+  notify:
+    name: Notify
+    needs: [test]
+    if: always()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Notify ntfy
+        env:
+          NTFY_URL: ${{ vars.NTFY_URL }}
+          NTFY_TOKEN: ${{ secrets.NTFY_TOKEN }}
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+          ACTOR: ${{ github.actor }}
+          SERVER: ${{ github.server_url }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          RESULT: ${{ needs.test.result }}
+        run: |
+          if [ -z "$NTFY_URL" ]; then
+            echo "NTFY_URL variable not set; skipping notification."
+            exit 0
+          fi
+
+          if [ "$RESULT" = "success" ]; then
+            status="passed"; tags="white_check_mark,pharmacy-api,ci"; priority="default"
+          else
+            status="failed"; tags="x,pharmacy-api,ci"; priority="high"
+          fi
+
+          title="pharmacy-api CI: ${status} on ${REF}"
+          body=$(printf 'Event:   %s\nBranch:  %s\nCommit:  %s\nActor:   %s\n\nTests: %s\n\nRun: %s/%s/actions/runs/%s' \
+            "$EVENT" "$REF" "$SHA" "$ACTOR" \
+            "$RESULT" \
+            "$SERVER" "$REPO" "$RUN_ID")
+
+          auth_args=()
+          if [ -n "$NTFY_TOKEN" ]; then
+            auth_args=(-H "Authorization: Bearer $NTFY_TOKEN")
+          fi
+
+          curl -sS --fail-with-body \
+            -H "Content-Type: text/plain" \
+            -H "Title: $title" \
+            -H "Tags: $tags" \
+            -H "Priority: $priority" \
+            "${auth_args[@]}" \
+            -d "$body" \
+            "$NTFY_URL"
