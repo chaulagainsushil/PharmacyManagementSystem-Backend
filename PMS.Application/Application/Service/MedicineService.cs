@@ -48,16 +48,30 @@ public class MedicineService : IMedicineService
         var tenantId = _tenantProvider.TenantId;
         Console.WriteLine($"[DEBUG] CreateAsync - TenantId: {tenantId}, Medicine: {dto.Name}");
         
-        var exists = await _repo.ExistsByNameAsync(dto.Name);
+        // Trim and normalize the name
+        var normalizedName = dto.Name?.Trim();
+        if (string.IsNullOrWhiteSpace(normalizedName))
+            return (false, "Medicine name cannot be empty.", null);
+
+        var exists = await _repo.ExistsByNameAsync(normalizedName);
         Console.WriteLine($"[DEBUG] ExistsByNameAsync returned: {exists}");
         
         if (exists)
-            return (false, $"Medicine '{dto.Name}' already exists.", null);
+            return (false, $"A medicine named '{normalizedName}' already exists in your inventory. Please use a different name or search for the existing medicine to update it.", null);
 
         // Check plan medicine limit
         var limitError = await CheckMedicineLimitAsync(1);
         if (limitError is not null)
             return (false, limitError, null);
+
+        // Auto-fix single unit if needed before validation
+        if (dto.Units != null && dto.Units.Count == 1)
+        {
+            var u = dto.Units[0];
+            u.IsBaseUnit = true;
+            u.IsDefault = true;
+            u.ConversionFactorToBase = 1m;
+        }
 
         // Units are required — validate them
         var unitError = ValidateInlineUnits(dto.Units);
@@ -66,7 +80,7 @@ public class MedicineService : IMedicineService
 
         var medicine = new Medicine
         {
-            Name                 = dto.Name.Trim(),
+            Name                 = normalizedName,
             GenericName          = dto.GenericName?.Trim(),
             CategoryId           = dto.CategoryId,
             ManufacturerId       = dto.ManufacturerId,
@@ -145,7 +159,7 @@ public class MedicineService : IMedicineService
             if (await _repo.ExistsByNameAsync(name))
             {
                 results.Add(new BulkCreateMedicineItemResultDto
-                    { Index = i, Success = false, Message = $"Medicine '{name}' already exists." });
+                    { Index = i, Success = false, Message = $"Medicine '{name}' already exists in your inventory." });
                 continue;
             }
 
@@ -235,8 +249,13 @@ public class MedicineService : IMedicineService
         if (!ConcurrencyHelper.Matches(existing.UpdatedAt, dto.UpdatedAt))
             return (false, "The record was modified by another user. Please refresh and try again.", true, null);
 
-        if (await _repo.ExistsByNameAsync(dto.Name, excludeId: id))
-            return (false, $"Medicine '{dto.Name}' already exists.", false, null);
+        // Trim and normalize the name
+        var normalizedName = dto.Name?.Trim();
+        if (string.IsNullOrWhiteSpace(normalizedName))
+            return (false, "Medicine name cannot be empty.", false, null);
+
+        if (await _repo.ExistsByNameAsync(normalizedName, excludeId: id))
+            return (false, $"A medicine named '{normalizedName}' already exists in your inventory. Please use a different name.", false, null);
 
         if (dto.Units is { Count: > 0 })
         {
@@ -249,7 +268,7 @@ public class MedicineService : IMedicineService
         if (entity is null)
             return (false, $"Medicine with ID {id} not found.", false, null);
 
-        entity.Name                 = dto.Name.Trim();
+        entity.Name                 = normalizedName;
         entity.GenericName          = dto.GenericName?.Trim();
         entity.CategoryId           = dto.CategoryId;
         entity.ManufacturerId       = dto.ManufacturerId;
@@ -258,6 +277,11 @@ public class MedicineService : IMedicineService
         entity.IsActive             = dto.IsActive;
 
         await _repo.UpdateAsync(entity);
+
+        if (dto.TotalStockInBaseUnit.HasValue)
+        {
+            await _repo.UpdateStockQuantityAsync(id, dto.TotalStockInBaseUnit.Value);
+        }
 
         if (dto.Units is { Count: > 0 })
         {
@@ -315,8 +339,11 @@ public class MedicineService : IMedicineService
         return null;
     }
 
-    private static string? ValidateInlineUnits(List<CreateMedicineUnitDto> units)
+    private static string? ValidateInlineUnits(List<CreateMedicineUnitDto>? units)
     {
+        if (units == null || units.Count == 0)
+            return "At least one unit is required.";
+
         var baseCount    = units.Count(u => u.IsBaseUnit);
         var defaultCount = units.Count(u => u.IsDefault);
 

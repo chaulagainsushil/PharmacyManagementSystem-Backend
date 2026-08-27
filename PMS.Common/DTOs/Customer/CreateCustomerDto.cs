@@ -14,4 +14,6 @@ public class CreateCustomerDto
 
     [MaxLength(500, ErrorMessage = "Address must not exceed 500 characters.")]
     public string? Address { get; set; }
+
+    public bool IsDefault { get; set; } = false;
 }

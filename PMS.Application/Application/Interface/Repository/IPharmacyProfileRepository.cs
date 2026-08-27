@@ -12,5 +12,7 @@ public interface IPharmacyProfileRepository
 
     Task<PharmacyProfile> CreateAsync(PharmacyProfile profile);
     Task<PharmacyProfile> UpdateAsync(PharmacyProfile profile);
+    Task<bool> UpdateLogoAsync(int id, string logoUrl);
+    Task<bool> UpdateSignatureAsync(int id, string signatureUrl);
     Task<bool> DeleteAsync(int id);
 }

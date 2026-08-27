@@ -76,10 +76,11 @@ public class PharmacyProfileService : IPharmacyProfileService
         if (dto.PhoneNumbers == null || dto.PhoneNumbers.Count == 0)
             return (false, "At least one phone number is required.", false, null);
 
-        // 4. Build update entity, preserving logo/signature URLs
+        // 4. Build update entity, preserving logo/signature URLs and TenantId
         var profile = new PharmacyProfile
         {
             PharmacyProfileId = id,
+            TenantId          = existing.TenantId,
             PharmacyName      = dto.PharmacyName.Trim(),
             LogoUrl           = existing.LogoUrl,
             SignatureUrl      = existing.SignatureUrl,
@@ -104,30 +105,9 @@ public class PharmacyProfileService : IPharmacyProfileService
     public async Task<(bool Success, string Message, PharmacyProfileResponseDto? Data)> UpdateLogoAsync(
         int id, string logoUrl)
     {
-        var profile = await _repo.GetByIdAsync(id);
-        if (profile is null)
+        var updated = await _repo.UpdateLogoAsync(id, logoUrl);
+        if (!updated)
             return (false, $"Pharmacy profile with ID {id} not found.", null);
-
-        var updated = new PharmacyProfile
-        {
-            PharmacyProfileId = id,
-            PharmacyName      = profile.PharmacyName,
-            LogoUrl           = logoUrl,
-            SignatureUrl      = profile.SignatureUrl,
-            PanNumber         = profile.PanNumber,
-            VatNumber         = profile.VatNumber,
-            Location          = profile.Location,
-            CreatedAt         = profile.CreatedAt,
-            PhoneNumbers      = profile.PhoneNumbers.Select(p => new PharmacyPhoneNumber
-            {
-                PharmacyPhoneNumberId = p.PharmacyPhoneNumberId,
-                PharmacyProfileId     = id,
-                PhoneNumber           = p.PhoneNumber,
-                Label                 = p.Label
-            }).ToList()
-        };
-
-        await _repo.UpdateAsync(updated);
 
         var full = await _repo.GetByIdAsync(id);
         return (true, "Logo updated successfully.", MapToResponse(full!));
@@ -136,30 +116,9 @@ public class PharmacyProfileService : IPharmacyProfileService
     public async Task<(bool Success, string Message, PharmacyProfileResponseDto? Data)> UpdateSignatureAsync(
         int id, string signatureUrl)
     {
-        var profile = await _repo.GetByIdAsync(id);
-        if (profile is null)
+        var updated = await _repo.UpdateSignatureAsync(id, signatureUrl);
+        if (!updated)
             return (false, $"Pharmacy profile with ID {id} not found.", null);
-
-        var updated = new PharmacyProfile
-        {
-            PharmacyProfileId = id,
-            PharmacyName      = profile.PharmacyName,
-            LogoUrl           = profile.LogoUrl,
-            SignatureUrl      = signatureUrl,
-            PanNumber         = profile.PanNumber,
-            VatNumber         = profile.VatNumber,
-            Location          = profile.Location,
-            CreatedAt         = profile.CreatedAt,
-            PhoneNumbers      = profile.PhoneNumbers.Select(p => new PharmacyPhoneNumber
-            {
-                PharmacyPhoneNumberId = p.PharmacyPhoneNumberId,
-                PharmacyProfileId     = id,
-                PhoneNumber           = p.PhoneNumber,
-                Label                 = p.Label
-            }).ToList()
-        };
-
-        await _repo.UpdateAsync(updated);
 
         var full = await _repo.GetByIdAsync(id);
         return (true, "Signature updated successfully.", MapToResponse(full!));
@@ -180,6 +139,7 @@ public class PharmacyProfileService : IPharmacyProfileService
     private static PharmacyProfileResponseDto MapToResponse(PharmacyProfile p) => new()
     {
         PharmacyProfileId = p.PharmacyProfileId,
+        TenantId          = p.TenantId,
         PharmacyName      = p.PharmacyName,
         LogoUrl           = p.LogoUrl,
         SignatureUrl      = p.SignatureUrl,
@@ -199,8 +159,10 @@ public class PharmacyProfileService : IPharmacyProfileService
     private static PharmacyProfileListItemDto MapToListItem(PharmacyProfile p) => new()
     {
         PharmacyProfileId = p.PharmacyProfileId,
+        TenantId          = p.TenantId,
         PharmacyName      = p.PharmacyName,
         LogoUrl           = p.LogoUrl,
+        SignatureUrl      = p.SignatureUrl,
         PanNumber         = p.PanNumber,
         VatNumber         = p.VatNumber,
         Location          = p.Location,

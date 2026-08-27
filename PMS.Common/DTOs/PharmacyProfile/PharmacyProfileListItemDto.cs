@@ -7,8 +7,10 @@ namespace PMS.Common.DTOs.PharmacyProfile;
 public class PharmacyProfileListItemDto
 {
     public int PharmacyProfileId { get; set; }
+    public Guid TenantId { get; set; }
     public string PharmacyName { get; set; } = string.Empty;
     public string? LogoUrl { get; set; }
+    public string? SignatureUrl { get; set; }
     public string? PanNumber { get; set; }
     public string? VatNumber { get; set; }
     public string? Location { get; set; }

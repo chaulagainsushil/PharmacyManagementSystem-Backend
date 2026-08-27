@@ -17,9 +17,20 @@ public class CustomerService : ICustomerService
         return await _repo.GetAllAsync();
     }
 
+    public async Task<IEnumerable<CustomerListItemDto>> SearchAsync(string query)
+    {
+        return await _repo.SearchAsync(query);
+    }
+
     public async Task<CustomerResponseDto?> GetByIdAsync(int id)
     {
         return await _repo.GetByIdAsync(id);
+    }
+
+    public async Task<CustomerResponseDto?> GetDefaultAsync()
+    {
+        var defaultCustomer = await _repo.GetDefaultCustomerAsync();
+        return defaultCustomer == null ? null : await _repo.GetByIdAsync(defaultCustomer.CustomerId);
     }
 
     public async Task<(bool Success, string Message, CustomerResponseDto? Data)> CreateAsync(
@@ -28,11 +39,17 @@ public class CustomerService : ICustomerService
         if (await _repo.ExistsByPhoneAsync(dto.PhoneNumber))
             return (false, $"A customer with phone '{dto.PhoneNumber}' already exists.", null);
 
+        if (dto.IsDefault)
+        {
+            await _repo.ClearOtherDefaultsAsync();
+        }
+
         var customer = new Customer
         {
             FullName    = dto.FullName.Trim(),
             PhoneNumber = dto.PhoneNumber.Trim(),
             Address     = dto.Address?.Trim(),
+            IsDefault   = dto.IsDefault,
             CreatedAt   = DateTime.UtcNow
         };
 
@@ -57,6 +74,11 @@ public class CustomerService : ICustomerService
         if (await _repo.ExistsByPhoneAsync(dto.PhoneNumber, excludeId: id))
             return (false, $"A customer with phone '{dto.PhoneNumber}' already exists.", false, null);
 
+        if (dto.IsDefault)
+        {
+            await _repo.ClearOtherDefaultsAsync(excludeId: id);
+        }
+
         // 4. Fetch tracked entity and mutate
         var entity = await _repo.GetEntityByIdAsync(id);
         if (entity is null)
@@ -65,11 +87,26 @@ public class CustomerService : ICustomerService
         entity.FullName    = dto.FullName.Trim();
         entity.PhoneNumber = dto.PhoneNumber.Trim();
         entity.Address     = dto.Address?.Trim();
+        entity.IsDefault   = dto.IsDefault;
 
         await _repo.UpdateAsync(entity);
 
         var updated = await _repo.GetByIdAsync(id);
         return (true, "Customer updated successfully.", false, updated);
+    }
+
+    public async Task<(bool Success, string Message, CustomerResponseDto? Data)> SetDefaultAsync(int id)
+    {
+        var entity = await _repo.GetEntityByIdAsync(id);
+        if (entity is null)
+            return (false, $"Customer with ID {id} not found.", null);
+
+        await _repo.ClearOtherDefaultsAsync(excludeId: id);
+        entity.IsDefault = true;
+        await _repo.UpdateAsync(entity);
+
+        var updated = await _repo.GetByIdAsync(id);
+        return (true, $"{entity.FullName} is now set as the default billing customer.", updated);
     }
 
     public async Task<(bool Success, string Message)> DeleteAsync(int id)

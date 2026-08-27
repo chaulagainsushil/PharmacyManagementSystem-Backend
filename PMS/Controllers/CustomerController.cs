@@ -21,6 +21,22 @@ public class CustomerController : ControllerBase
     public async Task<IActionResult> GetAll()
         => Ok(await _service.GetAllAsync());
 
+    /// <summary>Search customers by name or phone (server-side, case-insensitive, partial match).</summary>
+    [HttpGet("search")]
+    [ProducesResponseType(typeof(IEnumerable<CustomerListItemDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> Search([FromQuery] string q = "")
+        => Ok(await _service.SearchAsync(q));
+
+    /// <summary>Get the default customer for billing (if configured).</summary>
+    [HttpGet("default")]
+    [ProducesResponseType(typeof(CustomerResponseDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> GetDefault()
+    {
+        var data = await _service.GetDefaultAsync();
+        return data is null ? NoContent() : Ok(data);
+    }
+
     /// <summary>Get a customer by ID.</summary>
     [HttpGet("{id:int}")]
     [ProducesResponseType(typeof(CustomerResponseDto), StatusCodes.Status200OK)]
@@ -29,6 +45,25 @@ public class CustomerController : ControllerBase
     {
         var data = await _service.GetByIdAsync(id);
         return data is null ? NotFound(new { message = $"Customer with ID {id} not found." }) : Ok(data);
+    }
+
+    /// <summary>Set a customer as the default billing customer.</summary>
+    [HttpPatch("{id:int}/set-default")]
+    [Authorize(Roles = $"{AppRoles.SystemAdmin},{AppRoles.PharmacyAdmin},{AppRoles.Pharmacist},{AppRoles.Receptionist}")]
+    [ProducesResponseType(typeof(CustomerResponseDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> SetDefault(int id)
+    {
+        var (success, message, data) = await _service.SetDefaultAsync(id);
+        if (!success)
+        {
+            return message.Contains("not found")
+                ? NotFound(new { message })
+                : BadRequest(new { message });
+        }
+
+        return Ok(data);
     }
 
     /// <summary>Create a new customer.</summary>

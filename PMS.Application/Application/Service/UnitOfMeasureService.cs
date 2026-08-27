@@ -56,13 +56,15 @@ public class UnitOfMeasureService : IUnitOfMeasureService
         if (await _repo.ExistsByNameAsync(dto.Name, excludeId: id))
             return (false, $"A unit of measure named '{dto.Name}' already exists.", false, null);
 
-        // 4. Build a new entity instance for update (since GetByIdAsync returns AsNoTracking)
+        // 4. Build updated entity instance preserving TenantId
         var entity = new UnitOfMeasure
         {
             UnitOfMeasureId = id,
+            TenantId        = existing.TenantId,
             Name            = dto.Name.Trim(),
             Symbol          = dto.Symbol.Trim(),
-            IsActive        = dto.IsActive
+            IsActive        = dto.IsActive,
+            UpdatedAt       = DateTime.UtcNow
         };
 
         var updated = await _repo.UpdateAsync(entity);
@@ -86,6 +88,7 @@ public class UnitOfMeasureService : IUnitOfMeasureService
     private static UomDto Map(UnitOfMeasure u) => new()
     {
         UnitOfMeasureId = u.UnitOfMeasureId,
+        TenantId        = u.TenantId,
         Name            = u.Name,
         Symbol          = u.Symbol,
         IsActive        = u.IsActive,

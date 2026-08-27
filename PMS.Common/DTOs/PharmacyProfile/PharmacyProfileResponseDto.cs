@@ -4,6 +4,7 @@ namespace PMS.Common.DTOs.PharmacyProfile;
 public class PharmacyProfileResponseDto
 {
     public int PharmacyProfileId { get; set; }
+    public Guid TenantId { get; set; }
     public string PharmacyName { get; set; } = string.Empty;
     public string? LogoUrl { get; set; }
     public string? SignatureUrl { get; set; }

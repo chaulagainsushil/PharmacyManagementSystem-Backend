@@ -17,6 +17,13 @@ public class UpdateMedicineDto
     [Range(0, int.MaxValue, ErrorMessage = "Reorder level must be non-negative.")]
     public int ReorderLevel { get; set; } = 10;
 
+    /// <summary>
+    /// Optional: When supplied, updates the total stock quantity for this medicine.
+    /// Adjusts the latest active non-expired batch or creates an initial batch if none exists.
+    /// </summary>
+    [Range(0, int.MaxValue, ErrorMessage = "Stock quantity must be non-negative.")]
+    public int? TotalStockInBaseUnit { get; set; }
+
     public bool RequiresPrescription { get; set; }
     public bool IsActive { get; set; }
     public DateTime UpdatedAt { get; set; }

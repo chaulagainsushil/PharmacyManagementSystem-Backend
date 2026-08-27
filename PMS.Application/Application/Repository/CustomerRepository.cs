@@ -15,18 +15,45 @@ public class CustomerRepository : ICustomerRepository
     public async Task<IEnumerable<CustomerListItemDto>> GetAllAsync() =>
         await _db.Customers
             .AsNoTracking()
-            .OrderBy(c => c.FullName)
+            .OrderByDescending(c => c.IsDefault)
+            .ThenBy(c => c.FullName)
             .Select(c => new CustomerListItemDto
             {
                 CustomerId   = c.CustomerId,
                 FullName     = c.FullName,
                 PhoneNumber  = c.PhoneNumber,
                 Address      = c.Address,
+                IsDefault    = c.IsDefault,
                 TotalSales   = c.Sales.Count(),
                 CreatedAt    = c.CreatedAt,
                 UpdatedAt    = c.UpdatedAt
             })
             .ToListAsync();
+
+    public async Task<IEnumerable<CustomerListItemDto>> SearchAsync(string query)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+            return await GetAllAsync();
+
+        var q = query.Trim().ToLower();
+        return await _db.Customers
+            .AsNoTracking()
+            .Where(c => c.FullName.ToLower().Contains(q) || c.PhoneNumber.ToLower().Contains(q))
+            .OrderByDescending(c => c.IsDefault)
+            .ThenBy(c => c.FullName)
+            .Select(c => new CustomerListItemDto
+            {
+                CustomerId   = c.CustomerId,
+                FullName     = c.FullName,
+                PhoneNumber  = c.PhoneNumber,
+                Address      = c.Address,
+                IsDefault    = c.IsDefault,
+                TotalSales   = c.Sales.Count(),
+                CreatedAt    = c.CreatedAt,
+                UpdatedAt    = c.UpdatedAt
+            })
+            .ToListAsync();
+    }
 
     public async Task<CustomerResponseDto?> GetByIdAsync(int id) =>
         await _db.Customers
@@ -38,11 +65,34 @@ public class CustomerRepository : ICustomerRepository
                 FullName    = c.FullName,
                 PhoneNumber = c.PhoneNumber,
                 Address     = c.Address,
+                IsDefault   = c.IsDefault,
                 TotalSales  = c.Sales.Count(),
                 CreatedAt   = c.CreatedAt,
                 UpdatedAt   = c.UpdatedAt
             })
             .FirstOrDefaultAsync();
+
+    public async Task<Customer?> GetDefaultCustomerAsync() =>
+        await _db.Customers
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.IsDefault);
+
+    public async Task ClearOtherDefaultsAsync(int? excludeId = null)
+    {
+        var defaults = await _db.Customers
+            .Where(c => c.IsDefault && (excludeId == null || c.CustomerId != excludeId))
+            .ToListAsync();
+
+        foreach (var d in defaults)
+        {
+            d.IsDefault = false;
+        }
+
+        if (defaults.Count > 0)
+        {
+            await _db.SaveChangesAsync();
+        }
+    }
 
     public async Task<Customer?> GetEntityByIdAsync(int id) =>
         await _db.Customers.FindAsync(id);

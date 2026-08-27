@@ -73,7 +73,7 @@ public class UomController : ControllerBase
 
     /// <summary>Delete a unit of measure.</summary>
     [HttpDelete("{id:int}")]
-    [Authorize(Roles = AppRoles.SystemAdmin)]
+    [Authorize(Roles = $"{AppRoles.SystemAdmin},{AppRoles.PharmacyAdmin}")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Delete(int id)

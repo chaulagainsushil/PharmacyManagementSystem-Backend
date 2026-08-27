@@ -10,6 +10,7 @@ public class Customer : IHasTenant
     public string FullName { get; set; } = string.Empty;
     public string PhoneNumber { get; set; } = string.Empty;   // mandatory; unique per tenant
     public string? Address { get; set; }
+    public bool IsDefault { get; set; } = false;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 

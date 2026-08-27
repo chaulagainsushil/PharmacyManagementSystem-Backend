@@ -46,6 +46,17 @@ public class UnitOfMeasureRepository : IUnitOfMeasureRepository
 
     public async Task<UnitOfMeasure> UpdateAsync(UnitOfMeasure uom)
     {
+        var existing = await _db.UnitsOfMeasure.FindAsync(uom.UnitOfMeasureId);
+        if (existing != null)
+        {
+            existing.Name      = uom.Name;
+            existing.Symbol    = uom.Symbol;
+            existing.IsActive  = uom.IsActive;
+            existing.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+            return existing;
+        }
+
         _db.UnitsOfMeasure.Update(uom);
         await _db.SaveChangesAsync();
         return uom;

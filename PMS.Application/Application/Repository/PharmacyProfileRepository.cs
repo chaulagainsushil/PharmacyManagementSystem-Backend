@@ -21,6 +21,7 @@ public class PharmacyProfileRepository : IPharmacyProfileRepository
             .Select(p => new PharmacyProfile
             {
                 PharmacyProfileId = p.PharmacyProfileId,
+                TenantId          = p.TenantId,
                 PharmacyName      = p.PharmacyName,
                 LogoUrl           = p.LogoUrl,
                 SignatureUrl      = p.SignatureUrl,
@@ -49,6 +50,7 @@ public class PharmacyProfileRepository : IPharmacyProfileRepository
             .Select(p => new PharmacyProfile
             {
                 PharmacyProfileId = p.PharmacyProfileId,
+                TenantId          = p.TenantId,
                 PharmacyName      = p.PharmacyName,
                 LogoUrl           = p.LogoUrl,
                 SignatureUrl      = p.SignatureUrl,
@@ -82,15 +84,59 @@ public class PharmacyProfileRepository : IPharmacyProfileRepository
 
     public async Task<PharmacyProfile> UpdateAsync(PharmacyProfile profile)
     {
-        // Replace phone numbers: remove old ones then let EF add the new collection.
-        var existingPhones = await _db.PharmacyPhoneNumbers
-            .Where(p => p.PharmacyProfileId == profile.PharmacyProfileId)
-            .ToListAsync();
+        var existing = await _db.PharmacyProfiles
+            .Include(p => p.PhoneNumbers)
+            .FirstOrDefaultAsync(p => p.PharmacyProfileId == profile.PharmacyProfileId);
 
-        _db.PharmacyPhoneNumbers.RemoveRange(existingPhones);
-        _db.PharmacyProfiles.Update(profile);
+        if (existing is null)
+            return profile;
+
+        existing.PharmacyName = profile.PharmacyName;
+        existing.PanNumber    = profile.PanNumber;
+        existing.VatNumber    = profile.VatNumber;
+        existing.Location     = profile.Location;
+        if (!string.IsNullOrWhiteSpace(profile.LogoUrl))
+            existing.LogoUrl  = profile.LogoUrl;
+        if (!string.IsNullOrWhiteSpace(profile.SignatureUrl))
+            existing.SignatureUrl = profile.SignatureUrl;
+        existing.UpdatedAt    = DateTime.UtcNow;
+
+        // Replace phone numbers cleanly
+        _db.PharmacyPhoneNumbers.RemoveRange(existing.PhoneNumbers);
+        existing.PhoneNumbers = profile.PhoneNumbers.Select(ph => new PharmacyPhoneNumber
+        {
+            PharmacyProfileId = existing.PharmacyProfileId,
+            PhoneNumber       = ph.PhoneNumber,
+            Label             = ph.Label,
+            UpdatedAt         = DateTime.UtcNow
+        }).ToList();
+
         await _db.SaveChangesAsync();
-        return profile;
+        return existing;
+    }
+
+    public async Task<bool> UpdateLogoAsync(int id, string logoUrl)
+    {
+        var existing = await _db.PharmacyProfiles.FindAsync(id)
+            ?? await _db.PharmacyProfiles.FirstOrDefaultAsync(p => p.PharmacyProfileId == id);
+        if (existing is null) return false;
+
+        existing.LogoUrl   = logoUrl;
+        existing.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<bool> UpdateSignatureAsync(int id, string signatureUrl)
+    {
+        var existing = await _db.PharmacyProfiles.FindAsync(id)
+            ?? await _db.PharmacyProfiles.FirstOrDefaultAsync(p => p.PharmacyProfileId == id);
+        if (existing is null) return false;
+
+        existing.SignatureUrl = signatureUrl;
+        existing.UpdatedAt    = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+        return true;
     }
 
     public async Task<bool> DeleteAsync(int id)

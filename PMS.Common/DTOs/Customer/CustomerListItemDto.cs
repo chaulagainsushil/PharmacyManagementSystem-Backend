@@ -7,6 +7,7 @@ public class CustomerListItemDto
     public string FullName { get; set; } = string.Empty;
     public string PhoneNumber { get; set; } = string.Empty;
     public string? Address { get; set; }
+    public bool IsDefault { get; set; }
     public int TotalSales { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }

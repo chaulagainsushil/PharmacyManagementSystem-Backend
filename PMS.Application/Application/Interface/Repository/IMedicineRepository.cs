@@ -31,4 +31,10 @@ public interface IMedicineRepository
     /// in a single transaction.
     /// </summary>
     Task ReplaceUnitsAsync(int medicineId, IEnumerable<MedicineUnit> newUnits);
+
+    /// <summary>
+    /// Directly adjusts/sets the total stock quantity for a medicine in base units.
+    /// Adjusts the primary/latest active batch or creates a default initial batch if none exists.
+    /// </summary>
+    Task UpdateStockQuantityAsync(int medicineId, int newTotalQuantity);
 }

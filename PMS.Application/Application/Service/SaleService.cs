@@ -27,8 +27,10 @@ public class SaleService : ISaleService
             return (false, $"Pharmacist with ID {dto.PharmacistId} not found.", null);
 
         // ── 2. Validate each line item and plan FEFO deductions ───────────────
-        var plannedItems    = new List<PlannedSaleItem>();
-        var batchDeductions = new List<(int BatchId, int BaseUnitsToDeduct)>();
+        var plannedItems        = new List<PlannedSaleItem>();
+        var batchDeductions     = new List<(int BatchId, int BaseUnitsToDeduct)>();
+        var medicineCache       = new Dictionary<int, Medicine>();
+        var batchRemainingStock = new Dictionary<int, int>();
 
         foreach (var itemDto in dto.Items)
         {
@@ -75,9 +77,19 @@ public class SaleService : ISaleService
                 if (!itemDto.MedicineId.HasValue || !itemDto.MedicineUnitId.HasValue)
                     return (false, "MedicineId and MedicineUnitId are required for Medicine sales.", null);
 
-                var medicine = await _repo.GetMedicineWithUnitsAndFefoStockAsync(itemDto.MedicineId.Value);
-                if (medicine is null)
-                    return (false, $"Medicine with ID {itemDto.MedicineId} not found or inactive.", null);
+                if (!medicineCache.TryGetValue(itemDto.MedicineId.Value, out var medicine))
+                {
+                    medicine = await _repo.GetMedicineWithUnitsAndFefoStockAsync(itemDto.MedicineId.Value);
+                    if (medicine is null)
+                        return (false, $"Medicine with ID {itemDto.MedicineId} not found or inactive.", null);
+
+                    medicineCache[itemDto.MedicineId.Value] = medicine;
+                    foreach (var b in medicine.Batches)
+                    {
+                        if (!batchRemainingStock.ContainsKey(b.BatchId))
+                            batchRemainingStock[b.BatchId] = b.QuantityInBaseUnit;
+                    }
+                }
 
                 var saleUnit = medicine.Units.FirstOrDefault(u => u.MedicineUnitId == itemDto.MedicineUnitId.Value);
                 if (saleUnit is null)
@@ -103,7 +115,7 @@ public class SaleService : ISaleService
                 var baseUnitsRequested = medicine.ConvertToBaseQuantity(itemDto.MedicineUnitId.Value, itemDto.Quantity);
                 var unitPrice          = saleUnit.UnitPrice;   // selling price, not cost price
 
-                var totalAvailable = medicine.Batches.Sum(b => b.QuantityInBaseUnit);
+                var totalAvailable = medicine.Batches.Sum(b => batchRemainingStock.TryGetValue(b.BatchId, out var s) ? s : 0);
                 if (totalAvailable < baseUnitsRequested)
                     return (false,
                         $"Insufficient stock for '{medicine.Name}'. " +
@@ -115,8 +127,11 @@ public class SaleService : ISaleService
                 foreach (var batch in medicine.Batches)
                 {
                     if (remaining <= 0) break;
+                    var availableInBatch = batchRemainingStock.TryGetValue(batch.BatchId, out var bQty) ? bQty : 0;
+                    if (availableInBatch <= 0) continue;
 
-                    var takeFromBatch    = Math.Min(remaining, batch.QuantityInBaseUnit);
+                    var takeFromBatch = Math.Min(remaining, availableInBatch);
+                    batchRemainingStock[batch.BatchId] -= takeFromBatch;
                     remaining -= takeFromBatch;
 
                     var customerUnitsTaken = takeFromBatch / saleUnit.ConversionFactorToBase;

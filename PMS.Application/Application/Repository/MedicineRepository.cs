@@ -31,7 +31,7 @@ public class MedicineRepository : IMedicineRepository
                 GenericName          = m.GenericName,
                 CategoryName         = m.Category != null ? m.Category.CategoryName : null,
                 ManufacturerName     = m.Manufacturer != null ? m.Manufacturer.Name : null,
-                TotalStockInBaseUnit = m.Batches.Where(b => !b.IsExpired && b.QuantityInBaseUnit > 0).Sum(b => b.QuantityInBaseUnit),
+                TotalStockInBaseUnit = m.Batches.Where(b => b.ExpiryDate.Date >= DateTime.UtcNow.Date && b.QuantityInBaseUnit > 0).Sum(b => b.QuantityInBaseUnit),
                 ReorderLevel         = m.ReorderLevel,
                 IsActive             = m.IsActive,
                 RequiresPrescription = m.RequiresPrescription,
@@ -89,7 +89,7 @@ public class MedicineRepository : IMedicineRepository
                 GenericName          = m.GenericName,
                 CategoryName         = m.Category != null ? m.Category.CategoryName : null,
                 ManufacturerName     = m.Manufacturer != null ? m.Manufacturer.Name : null,
-                TotalStockInBaseUnit = m.Batches.Where(b => !b.IsExpired && b.QuantityInBaseUnit > 0).Sum(b => b.QuantityInBaseUnit),
+                TotalStockInBaseUnit = m.Batches.Where(b => b.ExpiryDate.Date >= DateTime.UtcNow.Date && b.QuantityInBaseUnit > 0).Sum(b => b.QuantityInBaseUnit),
                 ReorderLevel         = m.ReorderLevel,
                 IsActive             = m.IsActive,
                 RequiresPrescription = m.RequiresPrescription,
@@ -146,7 +146,7 @@ public class MedicineRepository : IMedicineRepository
                 ReorderLevel         = m.ReorderLevel,
                 RequiresPrescription = m.RequiresPrescription,
                 IsActive             = m.IsActive,
-                TotalStockInBaseUnit = m.Batches.Where(b => !b.IsExpired && b.QuantityInBaseUnit > 0).Sum(b => b.QuantityInBaseUnit),
+                TotalStockInBaseUnit = m.Batches.Where(b => b.ExpiryDate.Date >= DateTime.UtcNow.Date && b.QuantityInBaseUnit > 0).Sum(b => b.QuantityInBaseUnit),
                 CreatedAt            = m.CreatedAt,
                 UpdatedAt            = m.UpdatedAt,
                 Units = m.Units
@@ -265,5 +265,70 @@ public class MedicineRepository : IMedicineRepository
             await transaction.RollbackAsync();
             throw;
         }
+    }
+
+    public async Task UpdateStockQuantityAsync(int medicineId, int newTotalQuantity)
+    {
+        // 1. Fetch non-expired batches for this medicine ordered by expiry date descending
+        var batches = await _db.MedicineBatches
+            .Where(b => b.MedicineId == medicineId && b.ExpiryDate.Date >= DateTime.UtcNow.Date)
+            .OrderByDescending(b => b.ExpiryDate)
+            .ToListAsync();
+
+        if (batches.Count > 0)
+        {
+            var currentTotal = batches.Sum(b => b.QuantityInBaseUnit);
+            var difference = newTotalQuantity - currentTotal;
+
+            if (difference == 0) return;
+
+            if (difference > 0)
+            {
+                // Add the extra quantity to the latest batch
+                var latestBatch = batches[0];
+                latestBatch.QuantityInBaseUnit += difference;
+                latestBatch.UpdatedAt = DateTime.UtcNow;
+            }
+            else
+            {
+                // Reduce quantity across batches
+                var toDeduct = Math.Abs(difference);
+                foreach (var batch in batches)
+                {
+                    if (batch.QuantityInBaseUnit >= toDeduct)
+                    {
+                        batch.QuantityInBaseUnit -= toDeduct;
+                        batch.UpdatedAt = DateTime.UtcNow;
+                        toDeduct = 0;
+                        break;
+                    }
+                    else
+                    {
+                        toDeduct -= batch.QuantityInBaseUnit;
+                        batch.QuantityInBaseUnit = 0;
+                        batch.UpdatedAt = DateTime.UtcNow;
+                    }
+                }
+            }
+        }
+        else
+        {
+            if (newTotalQuantity <= 0) return;
+
+            // Create a default initial batch
+            var newBatch = new MedicineBatch
+            {
+                MedicineId           = medicineId,
+                BatchNumber          = $"INIT-{DateTime.UtcNow:yyyyMMdd}-{medicineId}",
+                ExpiryDate           = DateTime.UtcNow.AddYears(2),
+                QuantityInBaseUnit   = newTotalQuantity,
+                CostPricePerBaseUnit = 0,
+                ReceivedDate         = DateTime.UtcNow,
+                UpdatedAt            = DateTime.UtcNow
+            };
+            _db.MedicineBatches.Add(newBatch);
+        }
+
+        await _db.SaveChangesAsync();
     }
 }

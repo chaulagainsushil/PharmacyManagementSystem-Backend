@@ -108,6 +108,27 @@ public class MedicineUnitRepository : IMedicineUnitRepository
             mu.UnitOfMeasureId == unitOfMeasureId &&
             (excludeId == null || mu.MedicineUnitId != excludeId));
 
+    public async Task<MedicineUnit> UpdatePriceAsync(int medicineUnitId, decimal newUnitPrice)
+    {
+        var existing = await _db.MedicineUnits.FindAsync(medicineUnitId);
+        if (existing != null)
+        {
+            existing.UnitPrice = newUnitPrice;
+            existing.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+            return existing;
+        }
+
+        var unit = await _db.MedicineUnits.FirstOrDefaultAsync(u => u.MedicineUnitId == medicineUnitId);
+        if (unit is null)
+            throw new InvalidOperationException($"MedicineUnit with ID {medicineUnitId} not found.");
+
+        unit.UnitPrice = newUnitPrice;
+        unit.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+        return unit;
+    }
+
     public async Task<MedicineUnit> CreateAsync(MedicineUnit unit)
     {
         _db.MedicineUnits.Add(unit);
@@ -256,7 +277,7 @@ public class MedicineUnitRepository : IMedicineUnitRepository
                     })
                     .ToList(),
                 Batches = m.Batches
-                    .Where(b => !b.IsExpired && b.QuantityInBaseUnit > 0)
+                    .Where(b => b.ExpiryDate.Date >= DateTime.UtcNow.Date && b.QuantityInBaseUnit > 0)
                     .Select(b => new MedicineBatch
                     {
                         BatchId            = b.BatchId,
