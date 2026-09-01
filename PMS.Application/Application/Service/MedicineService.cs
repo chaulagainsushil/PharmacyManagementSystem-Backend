@@ -246,7 +246,7 @@ public class MedicineService : IMedicineService
         if (existing is null)
             return (false, $"Medicine with ID {id} not found.", false, null);
 
-        if (!ConcurrencyHelper.Matches(existing.UpdatedAt, dto.UpdatedAt))
+        if (dto.UpdatedAt.HasValue && !ConcurrencyHelper.Matches(existing.UpdatedAt, dto.UpdatedAt))
             return (false, "The record was modified by another user. Please refresh and try again.", true, null);
 
         // Trim and normalize the name

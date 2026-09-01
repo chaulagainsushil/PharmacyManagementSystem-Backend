@@ -66,6 +66,9 @@ public static class ApplicationServiceExtensions
         services.AddScoped<IPharmacyProfileRepository, PharmacyProfileRepository>();
         services.AddScoped<IPharmacyProfileService, PharmacyProfileService>();
 
+        // ── Pharmacist / Staff Management ─────────────────────────────────────
+        services.AddScoped<IPharmacistService, PharmacistService>();
+
         return services;
     }
 

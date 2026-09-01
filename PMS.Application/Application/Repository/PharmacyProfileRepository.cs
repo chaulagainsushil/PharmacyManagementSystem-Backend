@@ -117,8 +117,7 @@ public class PharmacyProfileRepository : IPharmacyProfileRepository
 
     public async Task<bool> UpdateLogoAsync(int id, string logoUrl)
     {
-        var existing = await _db.PharmacyProfiles.FindAsync(id)
-            ?? await _db.PharmacyProfiles.FirstOrDefaultAsync(p => p.PharmacyProfileId == id);
+        var existing = await _db.PharmacyProfiles.FirstOrDefaultAsync(p => p.PharmacyProfileId == id);
         if (existing is null) return false;
 
         existing.LogoUrl   = logoUrl;
@@ -129,8 +128,7 @@ public class PharmacyProfileRepository : IPharmacyProfileRepository
 
     public async Task<bool> UpdateSignatureAsync(int id, string signatureUrl)
     {
-        var existing = await _db.PharmacyProfiles.FindAsync(id)
-            ?? await _db.PharmacyProfiles.FirstOrDefaultAsync(p => p.PharmacyProfileId == id);
+        var existing = await _db.PharmacyProfiles.FirstOrDefaultAsync(p => p.PharmacyProfileId == id);
         if (existing is null) return false;
 
         existing.SignatureUrl = signatureUrl;

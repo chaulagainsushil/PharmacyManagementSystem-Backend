@@ -25,8 +25,8 @@ public class UpdateMedicineDto
     public int? TotalStockInBaseUnit { get; set; }
 
     public bool RequiresPrescription { get; set; }
-    public bool IsActive { get; set; }
-    public DateTime UpdatedAt { get; set; }
+    public bool IsActive { get; set; } = true;
+    public DateTime? UpdatedAt { get; set; }
 
     /// <summary>
     /// When provided, replaces all existing units for this medicine.

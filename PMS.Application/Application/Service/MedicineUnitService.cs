@@ -196,7 +196,7 @@ public class MedicineUnitService : IMedicineUnitService
         if (unit is null)
             return (false, $"MedicineUnit with ID {medicineUnitId} not found.", false, null);
 
-        if (!ConcurrencyHelper.Matches(unit.UpdatedAt, cmd.UpdatedAt))
+        if (cmd.UpdatedAt.HasValue && !ConcurrencyHelper.Matches(unit.UpdatedAt, cmd.UpdatedAt))
             return (false, "The record was modified by another user. Please refresh and try again.", true, null);
 
         var updatable = new MedicineUnit

@@ -73,14 +73,17 @@ public class MedicineRepository : IMedicineRepository
 
     public async Task<IEnumerable<MedicineListItemDto>> SearchAsync(string query)
     {
-        var q = query.Trim().ToLower();
+        if (string.IsNullOrWhiteSpace(query))
+            return await GetAllAsync();
+
+        var pattern = $"%{query.Trim()}%";
         return await _db.Medicines
             .AsNoTracking()
             .Where(m =>
-                m.Name.ToLower().Contains(q) ||
-                (m.GenericName != null && m.GenericName.ToLower().Contains(q)) ||
-                (m.Category != null && m.Category.CategoryName.ToLower().Contains(q)) ||
-                (m.Manufacturer != null && m.Manufacturer.Name.ToLower().Contains(q)))
+                EF.Functions.ILike(m.Name, pattern) ||
+                (m.GenericName != null && EF.Functions.ILike(m.GenericName, pattern)) ||
+                (m.Category != null && EF.Functions.ILike(m.Category.CategoryName, pattern)) ||
+                (m.Manufacturer != null && EF.Functions.ILike(m.Manufacturer.Name, pattern)))
             .OrderBy(m => m.Name)
             .Select(m => new MedicineListItemDto
             {

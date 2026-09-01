@@ -165,7 +165,7 @@ public class SetDefaultUnitCommand
     [Range(1, int.MaxValue)]
     public int MedicineUnitId { get; set; }
 
-    public DateTime UpdatedAt { get; set; }
+    public DateTime? UpdatedAt { get; set; }
 }
 
 /// <summary>Update the selling price for an existing MedicineUnit (legacy / quick-price endpoint).</summary>
@@ -175,7 +175,7 @@ public class UpdateMedicineUnitPriceCommand
     [Range(0, double.MaxValue, ErrorMessage = "UnitPrice must be non-negative.")]
     public decimal UnitPrice { get; set; }
 
-    public DateTime UpdatedAt { get; set; }
+    public DateTime? UpdatedAt { get; set; }
 }
 
 // ── Dual-unit endpoint DTOs ────────────────────────────────────────────────────

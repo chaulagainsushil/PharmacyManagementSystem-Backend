@@ -5,7 +5,7 @@ namespace PMS.Models.Models;
 /// TenantId is the stable, globally-unique identifier used across all tenant-scoped entities.
 /// PharmacyProfileId remains the int PK for FK relationships within this tenant's data.
 /// </summary>
-public class PharmacyProfile
+public class PharmacyProfile : IHasTenant
 {
     public int PharmacyProfileId { get; set; }
 
@@ -14,7 +14,7 @@ public class PharmacyProfile
     /// Embedded into every JWT as the "tenantId" claim and used by
     /// global query filters to isolate each tenant's data.
     /// </summary>
-    public Guid TenantId { get; set; } = Guid.NewGuid();
+    public Guid TenantId { get; set; } = Guid.Empty;
 
     public string PharmacyName { get; set; } = string.Empty;
 
