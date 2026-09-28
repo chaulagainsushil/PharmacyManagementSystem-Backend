@@ -27,7 +27,12 @@ RUN dotnet publish PMS/PMS.csproj \
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 
-# Create a non-root user for security (Red Hat-based image uses groupadd/useradd)
+# curl is used by the compose healthcheck (not shipped in the aspnet image)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends curl && \
+    rm -rf /var/lib/apt/lists/*
+
+# Create a non-root user for security
 RUN groupadd --system --gid 1001 appgroup && \
     useradd  --system --uid 1001 --gid appgroup appuser
 
