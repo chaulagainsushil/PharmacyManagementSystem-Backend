@@ -23,6 +23,11 @@ services:
       AllowedOrigins:                       ${AllowedOrigins:-http://localhost:3000}
     ports:
       - "127.0.0.1:${API_PORT:-8080}:8080"
+    volumes:
+      # Uploaded prescriptions, logos and signatures — survives redeploys.
+      - pms-wwwroot:/app/wwwroot
+    networks:
+      - pms
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8080/api/category -H 'Authorization: Bearer x' -o /dev/null -w '%{http_code}' | grep -qE '200|401'"]
@@ -35,3 +40,14 @@ services:
       options:
         max-size: "50m"
         max-file: "5"
+
+volumes:
+  pms-wwwroot:
+
+# Fixed subnet so the host PostgreSQL pg_hba.conf can allow exactly this range
+# (connect via the gateway address, e.g. Host=172.30.50.1).
+networks:
+  pms:
+    ipam:
+      config:
+        - subnet: ${PMS_SUBNET:-172.30.50.0/24}

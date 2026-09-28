@@ -75,6 +75,46 @@ Finally, log in to the Gitea container registry once from the test box (or
 confirm `docker compose pull` can reach it) if the registry requires auth
 for pulls as well as pushes.
 
+## UAT environment (`nd-contabo`)
+
+The `dev` channel auto-deploys to **https://pharmacy-uat.siddhasoft.com.np**
+on host `nd-contabo` (public IP `156.67.104.98`).
+
+| Piece | Where |
+|---|---|
+| API stack | `/var/lib/services/dockge/stacks/pharmacy-api` (`compose.yaml`, `docker-compose.prod.yml` symlink, `.env`) — `127.0.0.1:8090` |
+| UI stack | `/var/lib/services/dockge/stacks/pharmacy-ui` — `127.0.0.1:3010` |
+| nginx vhost | `/etc/nginx/sites-available/pharmacy-uat.siddhasoft.com.np` |
+| Database | host PostgreSQL, db `pmsdb`, role `pms_user` (password in `/root/.pharmacy-uat-db-password`) |
+| Uploads | docker volume `pharmacy-api_pms-wwwroot` mounted at `/app/wwwroot` |
+
+nginx routes by path on the single domain: `/api/`, `/prescriptions/` and
+`/pharmacy/` (wwwroot uploads) go to the API; everything else goes to the UI.
+The UI image is therefore built with `DEV_API_URL=https://pharmacy-uat.siddhasoft.com.np`.
+
+The API container joins the `pms` network on the fixed subnet
+`172.30.50.0/24` and reaches PostgreSQL at the gateway `172.30.50.1`.
+`pg_hba.conf` and `ufw` allow only that subnet, for `pmsdb`/`pms_user`, on 5432.
+
+### Migrations
+
+`RUN_MIGRATIONS=true` in the UAT `.env` makes the API apply EF Core
+migrations on startup, before seeding. Leave it unset in production and apply
+migrations manually.
+
+### UAT secrets/variables
+
+| Name | Kind | Value |
+|---|---|---|
+| `TEST_SSH_HOST` | secret, both repos | `156.67.104.98` (runner job containers cannot resolve `*.samyeak.vm`) |
+| `TEST_SSH_USER` | secret, both repos | `root` |
+| `TEST_SSH_KEY` | secret, both repos | private half of `gitea-ci-pharmacy-deploy` |
+| `REGISTRY_USER` | secret, both repos | `samyeak` (pairs with the org-level `REGISTRY_TOKEN`) |
+| `TEST_DEPLOY_ENABLED` | variable, both repos | `true` |
+| `TEST_DEPLOY_DIR` | variable, pharmacy-api | `/var/lib/services/dockge/stacks/pharmacy-api` |
+| `TEST_UI_DEPLOY_DIR` | variable, pharmacy-ui | `/var/lib/services/dockge/stacks/pharmacy-ui` |
+| `DEV_API_URL` | variable, pharmacy-ui | `https://pharmacy-uat.siddhasoft.com.np` |
+
 ## Cutting a release
 
 ```bash

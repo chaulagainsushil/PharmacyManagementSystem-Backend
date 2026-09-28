@@ -43,6 +43,15 @@ builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
+// ── Apply EF Core migrations (opt-in, e.g. UAT) ──────────────────────────────
+// Set RUN_MIGRATIONS=true to migrate on startup. Left unset (prod), schema
+// changes are applied manually.
+if (string.Equals(app.Configuration["RUN_MIGRATIONS"], "true", StringComparison.OrdinalIgnoreCase))
+{
+    using var scope = app.Services.CreateScope();
+    await scope.ServiceProvider.GetRequiredService<ApplicationDbContext>().Database.MigrateAsync();
+}
+
 // ── Seed roles ────────────────────────────────────────────────────────────────
 await app.SeedRolesAsync();
 
