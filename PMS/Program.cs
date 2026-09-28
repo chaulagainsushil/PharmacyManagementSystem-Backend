@@ -69,11 +69,22 @@ app.UseCors("MyAppPolicy");
 // Rate limiting must come before auth so throttled requests are rejected early
 app.UseRateLimiter();
 
-// Serves files from wwwroot — includes:
+// Serves files from the path configured in FileStorage:BasePath — includes:
 //   /prescriptions/*        (prescription images)
 //   /pharmacy/logos/*       (pharmacy logo images)
 //   /pharmacy/signatures/*  (authorised signature images)
-app.UseStaticFiles();
+var fileStorageBasePath = app.Configuration["FileStorage:BasePath"] ?? "wwwroot";
+var fileStorageAbsolutePath = Path.IsPathRooted(fileStorageBasePath)
+    ? fileStorageBasePath
+    : Path.Combine(app.Environment.ContentRootPath, fileStorageBasePath);
+
+Directory.CreateDirectory(fileStorageAbsolutePath);
+
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(fileStorageAbsolutePath),
+    RequestPath = ""
+});
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();

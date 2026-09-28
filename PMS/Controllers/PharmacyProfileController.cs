@@ -12,15 +12,18 @@ namespace PMS.Controllers;
 public class PharmacyProfileController : ControllerBase
 {
     private readonly IPharmacyProfileService _service;
-    private readonly IWebHostEnvironment _env;
+    private readonly string _fileStorageBasePath;
 
     private static readonly string[] AllowedImageExtensions = { ".jpg", ".jpeg", ".png", ".webp" };
     private const long MaxFileSizeBytes = 5 * 1024 * 1024; // 5 MB
 
-    public PharmacyProfileController(IPharmacyProfileService service, IWebHostEnvironment env)
+    public PharmacyProfileController(IPharmacyProfileService service, IConfiguration configuration, IWebHostEnvironment env)
     {
         _service = service;
-        _env     = env;
+        var configured = configuration["FileStorage:BasePath"] ?? "uploads";
+        _fileStorageBasePath = Path.IsPathRooted(configured)
+            ? configured
+            : Path.Combine(env.ContentRootPath, configured);
     }
 
     // ── Queries ────────────────────────────────────────────────────────────────
@@ -175,7 +178,7 @@ public class PharmacyProfileController : ControllerBase
 
     private async Task<string> SaveFileAsync(IFormFile file, string subFolder)
     {
-        var uploadDir = Path.Combine(_env.WebRootPath ?? "wwwroot", subFolder);
+        var uploadDir = Path.Combine(_fileStorageBasePath, subFolder);
         Directory.CreateDirectory(uploadDir);
 
         var ext      = Path.GetExtension(file.FileName).ToLowerInvariant();

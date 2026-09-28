@@ -13,12 +13,15 @@ namespace PMS.Controllers;
 public class MedicineController : ControllerBase
 {
     private readonly IMedicineService _service;
-    private readonly IWebHostEnvironment _env;
+    private readonly string _fileStorageBasePath;
 
-    public MedicineController(IMedicineService service, IWebHostEnvironment env)
+    public MedicineController(IMedicineService service, IConfiguration configuration, IWebHostEnvironment env)
     {
         _service = service;
-        _env = env;
+        var configured = configuration["FileStorage:BasePath"] ?? "uploads";
+        _fileStorageBasePath = Path.IsPathRooted(configured)
+            ? configured
+            : Path.Combine(env.ContentRootPath, configured);
     }
 
     /// <summary>Get all medicines.</summary>
@@ -138,7 +141,7 @@ public class MedicineController : ControllerBase
         if (file.Length > 10 * 1024 * 1024)
             return BadRequest(new { message = "File size must not exceed 10 MB." });
 
-        var uploadDir = Path.Combine(_env.WebRootPath ?? "wwwroot", "prescriptions");
+        var uploadDir = Path.Combine(_fileStorageBasePath, "prescriptions");
         Directory.CreateDirectory(uploadDir);
 
         var fileName = $"{Guid.NewGuid()}{ext}";
