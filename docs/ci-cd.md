@@ -92,6 +92,14 @@ nginx routes by path on the single domain: `/api/`, `/prescriptions/` and
 `/pharmacy/` (wwwroot uploads) go to the API; everything else goes to the UI.
 The UI image is therefore built with `DEV_API_URL=https://pharmacy-uat.siddhasoft.com.np`.
 
+DNS is **Cloudflare-proxied** with SSL mode "Full": Cloudflare connects to the
+origin on 443, where nginx serves the self-signed snakeoil cert (fine for
+"Full"; install a Cloudflare Origin or Let's Encrypt cert before switching to
+"Full (strict)"). The vhost restores the client IP from `CF-Connecting-IP`
+(trusting only Cloudflare ranges) and overwrites `X-Forwarded-For`, so the
+API's IP rate limiter sees real, unspoofable client IPs. Refresh the
+`set_real_ip_from` list if Cloudflare publishes new ranges.
+
 The API container joins the `pms` network on the fixed subnet
 `172.30.50.0/24` and reaches PostgreSQL at the gateway `172.30.50.1`.
 `pg_hba.conf` and `ufw` allow only that subnet, for `pmsdb`/`pms_user`, on 5432.
